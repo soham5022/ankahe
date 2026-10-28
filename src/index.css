@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #111216;
+  --bg-secondary: #191A20;
+  --bg-elevated: #202127;
+  --text-primary: #F3EFE8;
+  --text-secondary: #AAA6A1;
+  --color-gold: #C7A878;
+  --color-gold-light: #DFC49B;
+  --border-subtle: #34343A;
+  --surface-ivory: #F2EDE4;
+  --text-on-ivory: #292722;
+}
+
+body {
+  background-color: #111216;
+  color: #F3EFE8;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Warm ivory paper surface */
+.paper-surface,
+.paper-texture {
+  background-color: #F2EDE4;
+  background-image: radial-gradient(rgba(41, 39, 34, 0.035) 1px, transparent 0);
+  background-size: 14px 14px;
+  color: #292722;
+}
+
+/* Custom quiet scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111216;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #34343A;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C7A878;
+}
+
+/* Poetry & editorial reading text */
+.editorial-prose {
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+}
+
+.poetry-text {
+  line-height: 2.1;
+  letter-spacing: 0.015em;
+}
+
+.poetry-urdu {
+  font-family: 'Noto Nastaliq Urdu', 'Cormorant Garamond', serif;
+  line-height: 2.5;
+  direction: rtl;
+}
+
+.poetry-devanagari {
+  font-family: 'Noto Sans Devanagari', 'Inter', sans-serif;
+  line-height: 2.1;
+  letter-spacing: 0.015em;
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
