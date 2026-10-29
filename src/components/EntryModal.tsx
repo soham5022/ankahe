@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { X, Shield, Sparkles, ArrowLeft, ArrowRight, UserPlus } from 'lucide-react';
+import { X, Sparkles, ArrowLeft, ArrowRight, UserPlus, LogIn } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface EntryModalProps {
   isOpen: boolean;
@@ -11,23 +12,15 @@ interface EntryModalProps {
 export const EntryModal: React.FC<EntryModalProps> = ({
   isOpen,
   onClose,
-  onShowToast,
 }) => {
   const navigate = useNavigate();
-  const [prototypeNote, setPrototypeNote] = useState<string | null>(null);
+  const { user } = useAuth();
 
   if (!isOpen) return null;
 
   const handleEnterDirectly = () => {
     onClose();
     navigate('/home');
-  };
-
-  const handlePrototypeClick = (methodName: string) => {
-    setPrototypeNote(
-      `Notice: "${methodName}" is in frontend prototype mode for Phase 2. Password databases will arrive in Phase 3. You can step directly into the community now!`
-    );
-    onShowToast("Authentication is in design prototype mode for Phase 2.");
   };
 
   return (
@@ -38,7 +31,6 @@ export const EntryModal: React.FC<EntryModalProps> = ({
       aria-label="Enter ANKAHE"
     >
       <div className="relative w-full max-w-lg bg-ankahe-secondary rounded-3xl border border-ankahe-border shadow-2xl p-6 sm:p-10 space-y-8 my-8 text-center">
-        
         {/* Top Controls */}
         <div className="flex items-center justify-between pb-4 border-b border-ankahe-border/60">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-ankahe-gold font-medium">
@@ -70,65 +62,56 @@ export const EntryModal: React.FC<EntryModalProps> = ({
           </div>
         </div>
 
-        {/* Direct Community Action (Phase 2 Entry) */}
-        <div className="space-y-3 max-w-sm mx-auto">
-          <button
-            onClick={handleEnterDirectly}
-            className="w-full py-3 px-6 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-sm font-medium transition-all shadow-sm flex items-center justify-center gap-2"
-          >
-            <span>Enter Community Experience</span>
-            <ArrowRight size={15} />
-          </button>
-
-          {/* Or set a pen name */}
-          <button
-            onClick={() => {
-              onClose();
-              navigate('/signup');
-            }}
-            className="w-full py-2.5 px-4 rounded-xl bg-ankahe-elevated hover:bg-ankahe-secondary border border-ankahe-border hover:border-ankahe-gold/40 text-xs text-ankahe-text flex items-center justify-center gap-2 transition-colors"
-          >
-            <UserPlus size={13} className="text-ankahe-gold" />
-            <span>Set Pen Name First (/signup)</span>
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 text-xs text-ankahe-muted/40 font-mono max-w-sm mx-auto">
-          <span className="flex-1 h-[1px] bg-ankahe-border" />
-          <span>Future Auth Preview</span>
-          <span className="flex-1 h-[1px] bg-ankahe-border" />
-        </div>
-
-        {/* Auth Prototype Buttons */}
-        <div className="space-y-2 max-w-sm mx-auto">
-          <button
-            onClick={() => handlePrototypeClick('Continue with Google')}
-            className="w-full py-2 px-3 rounded-lg bg-ankahe-secondary hover:bg-ankahe-elevated border border-ankahe-border text-xs text-ankahe-muted hover:text-ankahe-text flex items-center justify-center gap-2 transition-colors"
-          >
-            <span>Google Login Preview</span>
-          </button>
-
-          <Link
-            to="/login"
-            onClick={onClose}
-            className="block text-xs text-ankahe-gold hover:text-ankahe-gold-light py-1"
-          >
-            Explore Full Authentication Prototype (/login) →
-          </Link>
-        </div>
-
-        {/* Prototype Transparency Notice */}
-        <div className="p-4 rounded-2xl bg-ankahe-elevated/50 border border-ankahe-border text-left text-xs space-y-1.5 text-ankahe-muted/90">
-          <div className="flex items-center gap-1.5 text-ankahe-gold font-medium">
-            <Shield size={13} />
-            <span>Phase 2 Frontend Transparency</span>
+        {/* Actions based on auth status */}
+        {user ? (
+          <div className="space-y-3 max-w-sm mx-auto">
+            <button
+              onClick={handleEnterDirectly}
+              className="w-full py-3 px-6 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-sm font-medium transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              <span>Return to Community Home</span>
+              <ArrowRight size={15} />
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                navigate('/my-space');
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-ankahe-elevated hover:bg-ankahe-secondary border border-ankahe-border text-xs text-ankahe-text flex items-center justify-center gap-2 transition-colors"
+            >
+              <span>Open My Space</span>
+            </button>
           </div>
-          <p className="font-light leading-relaxed">
-            {prototypeNote ||
-              "All community routes (Home, Discover, Write, Unsent Letters, Quiet Corner, My Space) are accessible immediately as functional frontend prototypes. Permanent account authentication will be added in Phase 3."}
-          </p>
-        </div>
+        ) : (
+          <div className="space-y-3 max-w-sm mx-auto">
+            <Link
+              to="/login"
+              onClick={onClose}
+              className="w-full py-3 px-6 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-sm font-medium transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              <LogIn size={15} />
+              <span>Sign In with Email</span>
+            </Link>
+
+            <Link
+              to="/signup"
+              onClick={onClose}
+              className="w-full py-2.5 px-4 rounded-xl bg-ankahe-elevated hover:bg-ankahe-secondary border border-ankahe-border hover:border-ankahe-gold/40 text-xs text-ankahe-text flex items-center justify-center gap-2 transition-colors"
+            >
+              <UserPlus size={13} className="text-ankahe-gold" />
+              <span>Create Pen Name & Account</span>
+            </Link>
+
+            <div className="pt-2">
+              <button
+                onClick={handleEnterDirectly}
+                className="text-xs text-ankahe-muted hover:text-ankahe-gold transition-colors py-1"
+              >
+                Browse publicly without signing in →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Return Button */}
         <div className="pt-2">

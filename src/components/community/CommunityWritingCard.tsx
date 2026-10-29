@@ -1,11 +1,12 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import type { WritingItem } from '../../types';
-import { Heart, Bookmark, Sun, Eye, Lock } from 'lucide-react';
+import { Heart, Bookmark, Sun, Lock, ExternalLink } from 'lucide-react';
 import { useCommunity } from '../../context/CommunityContext';
 
 interface CommunityWritingCardProps {
   item: WritingItem;
-  onOpen: (item: WritingItem) => void;
+  onOpen?: (item: WritingItem) => void;
 }
 
 export const CommunityWritingCard: React.FC<CommunityWritingCardProps> = ({ item, onOpen }) => {
@@ -16,74 +17,92 @@ export const CommunityWritingCard: React.FC<CommunityWritingCardProps> = ({ item
   const isUrdu = item.language === 'Urdu';
   const isDevanagari = item.language === 'Hindi' || item.language === 'Marathi';
 
+  const handleCardClick = () => {
+    if (onOpen) {
+      onOpen(item);
+    }
+  };
+
   return (
     <article
-      className={`rounded-2xl transition-all duration-300 relative border ${
+      className={`rounded-2xl transition-all duration-300 relative border flex flex-col justify-between ${
         item.isPaperStyle
           ? 'paper-surface p-7 sm:p-9 border-ankahe-paper-border shadow-paper text-ankahe-paper-dark'
           : 'bg-ankahe-secondary/70 hover:bg-ankahe-secondary p-7 sm:p-9 border-ankahe-border text-ankahe-text shadow-subtle'
       }`}
     >
-      {/* Top Metadata Line */}
-      <div
-        className={`flex items-center justify-between text-xs pb-3.5 border-b border-dashed ${
-          item.isPaperStyle ? 'border-ankahe-paper-border text-ankahe-gold-dark' : 'border-ankahe-border/70 text-ankahe-muted/70'
-        }`}
-      >
-        <div className="flex items-center gap-2 font-mono text-[11px]">
-          <span className="uppercase tracking-wider font-medium">{item.type}</span>
-          <span>•</span>
-          <span>{item.language}</span>
-          {item.category && (
-            <>
-              <span>•</span>
-              <span className="capitalize">{item.category}</span>
-            </>
-          )}
-        </div>
-
-        {item.visibility === 'private' && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">
-            <Lock size={10} />
-            <span>Private</span>
-          </span>
-        )}
-      </div>
-
-      {/* Main Content Area */}
-      <div 
-        onClick={() => onOpen(item)}
-        className="py-5 cursor-pointer group"
-      >
-        {item.title && (
-          <h3 
-            className={`font-serif text-lg sm:text-xl font-medium mb-3 group-hover:text-ankahe-gold transition-colors ${
-              item.isPaperStyle ? 'text-ankahe-paper-dark' : 'text-ankahe-text'
-            }`}
-          >
-            {item.title}
-          </h3>
-        )}
-
+      <div>
+        {/* Top Metadata Line */}
         <div
-          dir={isUrdu ? 'rtl' : 'ltr'}
-          className={`leading-relaxed whitespace-pre-wrap ${
-            isUrdu
-              ? 'poetry-urdu text-xl sm:text-2xl text-right'
-              : isDevanagari
-              ? 'poetry-devanagari text-base sm:text-lg font-normal'
-              : 'font-serif text-base sm:text-lg font-light'
-          } ${
-            item.isPaperStyle ? 'text-ankahe-paper-dark/95' : 'text-ankahe-text/90'
+          className={`flex items-center justify-between text-xs pb-3.5 border-b border-dashed ${
+            item.isPaperStyle ? 'border-ankahe-paper-border text-ankahe-gold-dark' : 'border-ankahe-border/70 text-ankahe-muted/70'
           }`}
         >
-          {item.content}
+          <div className="flex items-center gap-2 font-mono text-[11px]">
+            <span className="uppercase tracking-wider font-medium">{item.type}</span>
+            <span>•</span>
+            <span>{item.language}</span>
+            {item.category && (
+              <>
+                <span>•</span>
+                <span className="capitalize">{item.category}</span>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {item.visibility === 'private' && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">
+                <Lock size={10} />
+                <span>Private</span>
+              </span>
+            )}
+            <Link
+              to={`/writing/${item.id}`}
+              className="p-1 hover:text-ankahe-gold transition-colors opacity-60 hover:opacity-100"
+              title="Open full page"
+              aria-label="Open full page"
+            >
+              <ExternalLink size={12} />
+            </Link>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div 
+          onClick={handleCardClick}
+          className="py-5 cursor-pointer group"
+        >
+          {item.title && (
+            <h3 
+              className={`font-serif text-lg sm:text-xl font-medium mb-3 group-hover:text-ankahe-gold transition-colors ${
+                item.isPaperStyle ? 'text-ankahe-paper-dark' : 'text-ankahe-text'
+              }`}
+            >
+              {item.title}
+            </h3>
+          )}
+
+          <div
+            dir={isUrdu ? 'rtl' : 'ltr'}
+            className={`leading-relaxed whitespace-pre-wrap ${
+              isUrdu
+                ? 'poetry-urdu text-xl sm:text-2xl text-right'
+                : isDevanagari
+                ? 'poetry-devanagari text-base sm:text-lg font-normal'
+                : 'font-serif text-base sm:text-lg font-light'
+            } ${
+              item.isPaperStyle ? 'text-ankahe-paper-dark/95' : 'text-ankahe-text/90'
+            }`}
+          >
+            {item.content}
+          </div>
         </div>
       </div>
 
       {/* Bottom Footer: Author & Quiet Resonances */}
       <div
-        className={`pt-4 border-t border-dashed flex flex-wrap items-center justify-between gap-3 text-xs ${
+        className={`pt-4 border-t border-dashed flex flex-wrap items-center justify-between gap-3 text-xs mt-4 ${
           item.isPaperStyle ? 'border-ankahe-paper-border text-ankahe-paper-dark/70' : 'border-ankahe-border/60 text-ankahe-muted'
         }`}
       >
@@ -110,7 +129,7 @@ export const CommunityWritingCard: React.FC<CommunityWritingCardProps> = ({ item
                 ? 'hover:bg-ankahe-paper-muted text-ankahe-paper-dark/80'
                 : 'hover:bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-gold'
             }`}
-            title="Acknowledge this resonance without numbers"
+            title="Acknowledge this resonance"
             aria-label="I felt this"
           >
             <Heart size={12} className={currentResonance.felt ? 'fill-current' : ''} />
@@ -130,38 +149,25 @@ export const CommunityWritingCard: React.FC<CommunityWritingCardProps> = ({ item
             title="Send quiet warmth"
             aria-label="Send warmth"
           >
-            <Sun size={12} />
+            <Sun size={12} className={currentResonance.warmth ? 'fill-current' : ''} />
             <span className="hidden sm:inline">Warmth</span>
           </button>
 
-          {/* Bookmark / Save */}
+          {/* Save to Sanctuary */}
           <button
             onClick={() => toggleSavePiece(item.id)}
-            className={`p-1.5 rounded-full transition-colors ${
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-colors ${
               isSaved
-                ? 'text-ankahe-gold bg-ankahe-gold/15'
+                ? 'bg-ankahe-gold text-ankahe-ink font-medium shadow-sm'
                 : item.isPaperStyle
-                ? 'hover:bg-ankahe-paper-muted text-ankahe-paper-dark/70 hover:text-ankahe-paper-dark'
+                ? 'hover:bg-ankahe-paper-muted text-ankahe-paper-dark/80'
                 : 'hover:bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-text'
             }`}
-            title={isSaved ? "Saved in My Space" : "Save to My Space"}
-            aria-label={isSaved ? "Saved" : "Save piece"}
+            title="Keep in your private sanctuary"
+            aria-label="Save piece"
           >
-            <Bookmark size={13} className={isSaved ? 'fill-current' : ''} />
-          </button>
-
-          {/* Open Complete View */}
-          <button
-            onClick={() => onOpen(item)}
-            className={`p-1.5 rounded-full transition-colors ${
-              item.isPaperStyle
-                ? 'hover:bg-ankahe-paper-muted text-ankahe-paper-dark/70 hover:text-ankahe-paper-dark'
-                : 'hover:bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-text'
-            }`}
-            title="Read in quiet focus"
-            aria-label="Open reading mode"
-          >
-            <Eye size={13} />
+            <Bookmark size={12} className={isSaved ? 'fill-current' : ''} />
+            <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
           </button>
         </div>
       </div>

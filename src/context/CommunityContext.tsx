@@ -1,160 +1,127 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { WritingItem, DraftItem, UserProfile, UnsentLetterItem } from '../types';
-import { SAMPLE_WRITINGS } from '../data/sampleWriting';
-import { SAMPLE_LETTERS } from '../data/unsentLetters';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { 
+  fetchUserSavedIds, 
+  fetchUserReactions, 
+  toggleSaveWriting, 
+  toggleReaction 
+} from '../lib/writingsService';
 
 interface CommunityContextType {
-  writings: WritingItem[];
-  letters: UnsentLetterItem[];
-  drafts: DraftItem[];
   savedPieceIds: string[];
   resonances: Record<string, { felt?: boolean; stayed?: boolean; warmth?: boolean }>;
-  userProfile: UserProfile;
-  addWriting: (item: Omit<WritingItem, 'id'>) => WritingItem;
-  saveDraft: (draft: Omit<DraftItem, 'id' | 'savedAt'> & { id?: string }) => DraftItem;
-  deleteDraft: (id: string) => void;
-  toggleSavePiece: (id: string) => void;
-  toggleResonance: (id: string, type: 'felt' | 'stayed' | 'warmth', message: string) => void;
-  updateProfile: (updates: Partial<UserProfile>) => void;
+  toggleSavePiece: (id: string) => Promise<boolean>;
+  toggleResonance: (id: string, type: 'felt' | 'stayed' | 'warmth', message?: string) => Promise<boolean>;
   toastMessage: string | null;
   showToast: (msg: string) => void;
+  refreshInteractions: () => Promise<void>;
 }
 
 const CommunityContext = createContext<CommunityContextType | undefined>(undefined);
 
 export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [writings, setWritings] = useState<WritingItem[]>(SAMPLE_WRITINGS);
-  const [letters] = useState<UnsentLetterItem[]>(SAMPLE_LETTERS);
-  
-  // In-memory drafts for current session
-  const [drafts, setDrafts] = useState<DraftItem[]>([
-    {
-      id: 'draft-demo-1',
-      title: 'Midnight on the platform',
-      content: 'I saw someone who looked like you today. I almost called out...',
-      type: 'Thought',
-      language: 'Hinglish',
-      category: 'nostalgia',
-      visibility: 'private',
-      savedAt: 'Session draft'
-    }
-  ]);
-
-  // Saved pieces
-  const [savedPieceIds, setSavedPieceIds] = useState<string[]>(['w-1', 'w-5']);
-
-  // Resonances
-  const [resonances, setResonances] = useState<Record<string, { felt?: boolean; stayed?: boolean; warmth?: boolean }>>({
-    'w-1': { felt: true },
-    'w-5': { warmth: true },
-  });
-
-  // User Profile Prototype
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    penName: 'A Quiet Heart',
-    bio: 'Writing in the quiet corners of late night trains and empty tea stalls.',
-    preferredLanguages: ['Hinglish', 'Hindi', 'English', 'Marathi'],
-    isAnonymousDefault: false,
-    joinedDate: 'Phase 2 Prototype Member',
-  });
-
-  // Toast feedback
+  const { user } = useAuth();
+  const [savedPieceIds, setSavedPieceIds] = useState<string[]>([]);
+  const [resonances, setResonances] = useState<Record<string, { felt?: boolean; stayed?: boolean; warmth?: boolean }>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 2800);
-  };
+  }, []);
 
-  const addWriting = (item: Omit<WritingItem, 'id'>): WritingItem => {
-    const newItem: WritingItem = {
-      ...item,
-      id: `community-${Date.now()}`,
-      feltCount: 1,
-      userFelt: true,
-    };
-    // Add to in-memory demonstration feed (at top)
-    setWritings((prev) => [newItem, ...prev]);
-    showToast("Words placed gently in session feed.");
-    return newItem;
-  };
+  const refreshInteractions = useCallback(async () => {
+    if (!user) {
+      setSavedPieceIds([]);
+      setResonances({});
+      return;
+    }
+    try {
+      const [saved, res] = await Promise.all([
+        fetchUserSavedIds(user.id),
+        fetchUserReactions(user.id),
+      ]);
+      setSavedPieceIds(saved);
+      setResonances(res);
+    } catch (err) {
+      console.warn('[ANKAHE Community] Interactions load error:', err);
+    }
+  }, [user]);
 
-  const saveDraft = (draftData: Omit<DraftItem, 'id' | 'savedAt'> & { id?: string }): DraftItem => {
-    const id = draftData.id || `draft-${Date.now()}`;
-    const newDraft: DraftItem = {
-      ...draftData,
-      id,
-      savedAt: 'Saved just now (Session)',
-    };
+  useEffect(() => {
+    refreshInteractions();
+  }, [refreshInteractions]);
 
-    setDrafts((prev) => {
-      const existingIdx = prev.findIndex((d) => d.id === id);
-      if (existingIdx >= 0) {
-        const updated = [...prev];
-        updated[existingIdx] = newDraft;
-        return updated;
-      }
-      return [newDraft, ...prev];
-    });
+  const toggleSavePiece = async (id: string): Promise<boolean> => {
+    if (!user) {
+      showToast("Please sign in to save pieces to your quiet sanctuary.");
+      return false;
+    }
 
-    showToast("Draft kept safe in this session.");
-    return newDraft;
-  };
+    const { saved, error } = await toggleSaveWriting(id, user.id);
+    if (error) {
+      showToast(`Could not update saved collection: ${error}`);
+      return false;
+    }
 
-  const deleteDraft = (id: string) => {
-    setDrafts((prev) => prev.filter((d) => d.id !== id));
-    showToast("Draft removed.");
-  };
-
-  const toggleSavePiece = (id: string) => {
     setSavedPieceIds((prev) => {
-      const exists = prev.includes(id);
-      if (exists) {
-        showToast("Removed from your saved pieces.");
-        return prev.filter((item) => item !== id);
-      } else {
+      if (saved) {
         showToast("Saved softly to your private space.");
         return [...prev, id];
+      } else {
+        showToast("Removed from your saved collection.");
+        return prev.filter((item) => item !== id);
       }
     });
+
+    return saved;
   };
 
-  const toggleResonance = (id: string, type: 'felt' | 'stayed' | 'warmth', message: string) => {
+  const toggleResonance = async (
+    id: string,
+    type: 'felt' | 'stayed' | 'warmth',
+    message?: string
+  ): Promise<boolean> => {
+    if (!user) {
+      showToast("Please sign in to share a quiet resonance.");
+      return false;
+    }
+
+    const { active, error } = await toggleReaction(id, type, user.id);
+    if (error) {
+      showToast(`Could not send resonance: ${error}`);
+      return false;
+    }
+
     setResonances((prev) => {
       const current = prev[id] || {};
-      const nextVal = !current[type];
       return {
         ...prev,
-        [id]: { ...current, [type]: nextVal },
+        [id]: { ...current, [type]: active },
       };
     });
-    showToast(message);
-  };
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => ({ ...prev, ...updates }));
-    showToast("Profile prototype updated.");
+    if (active && message) {
+      showToast(message);
+    } else if (active) {
+      showToast("You let this know it was felt.");
+    }
+
+    return active;
   };
 
   return (
     <CommunityContext.Provider
       value={{
-        writings,
-        letters,
-        drafts,
         savedPieceIds,
         resonances,
-        userProfile,
-        addWriting,
-        saveDraft,
-        deleteDraft,
         toggleSavePiece,
         toggleResonance,
-        updateProfile,
         toastMessage,
         showToast,
+        refreshInteractions,
       }}
     >
       {children}

@@ -1,13 +1,17 @@
-import React, { useState, useMemo } from 'react';
-import { Search, RotateCcw, Filter } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, RotateCcw, Compass, Feather } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { CommunityLayout } from '../components/community/CommunityLayout';
 import { CommunityWritingCard } from '../components/community/CommunityWritingCard';
 import { WritingReaderModal } from '../components/community/WritingReaderModal';
-import { useCommunity } from '../context/CommunityContext';
+import { useAuth } from '../context/AuthContext';
+import { searchPublicWritings } from '../lib/writingsService';
 import type { WritingItem } from '../types';
 
 export const Discover: React.FC = () => {
-  const { writings } = useCommunity();
+  const { user } = useAuth();
+  const [writings, setWritings] = useState<WritingItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<WritingItem | null>(null);
 
   // Filter states
@@ -20,10 +24,11 @@ export const Discover: React.FC = () => {
     'All Writing',
     'Sher & Shayari',
     'Poetry',
-    'Thoughts',
-    'Personal Reflections',
-    'Unsent Letters',
-    'Quotes',
+    'Thought',
+    'Personal Reflection',
+    'Unsent Letter',
+    'Quote',
+    'Observation',
   ];
 
   const languages = ['All', 'Hindi', 'Hinglish', 'Marathi', 'English', 'Urdu', 'Other'];
@@ -38,6 +43,7 @@ export const Discover: React.FC = () => {
     { label: 'Gratitude', value: 'gratitude' },
     { label: 'Loneliness', value: 'loneliness' },
     { label: 'New Beginnings', value: 'new beginnings' },
+    { label: 'Everyday Life', value: 'everyday life' },
   ];
 
   const hasActiveFilters =
@@ -53,50 +59,28 @@ export const Discover: React.FC = () => {
     setSelectedMood('All');
   };
 
-  // Filter logic
-  const filteredWritings = useMemo(() => {
-    return writings.filter((item) => {
-      // 1. Text Search (title, content, type, language, author)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesText = item.content.toLowerCase().includes(q);
-        const matchesTitle = item.title ? item.title.toLowerCase().includes(q) : false;
-        const matchesType = item.type.toLowerCase().includes(q);
-        const matchesLang = item.language.toLowerCase().includes(q);
-        const matchesAuthor = item.author.toLowerCase().includes(q);
-        if (!matchesText && !matchesTitle && !matchesType && !matchesLang && !matchesAuthor) {
-          return false;
-        }
-      }
-
-      // 2. Content Category
-      if (selectedCategory !== 'All Writing') {
-        if (selectedCategory === 'Thoughts' && item.type !== 'Thought') return false;
-        if (selectedCategory === 'Personal Reflections' && item.type !== 'Personal Reflection') return false;
-        if (selectedCategory === 'Sher & Shayari' && item.type !== 'Sher & Shayari') return false;
-        if (selectedCategory === 'Poetry' && item.type !== 'Poetry') return false;
-        if (selectedCategory === 'Unsent Letters' && item.type !== 'Unsent Letter') return false;
-        if (selectedCategory === 'Quotes' && item.type !== 'Quote') return false;
-      }
-
-      // 3. Language
-      if (selectedLanguage !== 'All' && item.language !== selectedLanguage) {
-        return false;
-      }
-
-      // 4. Mood
-      if (selectedMood !== 'All' && item.category !== selectedMood) {
-        return false;
-      }
-
-      return true;
+  const loadDiscoverWritings = useCallback(async () => {
+    setLoading(true);
+    const { writings: data } = await searchPublicWritings(searchQuery, {
+      type: selectedCategory === 'All Writing' ? undefined : selectedCategory,
+      language: selectedLanguage === 'All' ? undefined : selectedLanguage,
+      mood: selectedMood === 'All' ? undefined : selectedMood,
+      currentUserId: user?.id,
     });
-  }, [writings, searchQuery, selectedCategory, selectedLanguage, selectedMood]);
+    setWritings(data);
+    setLoading(false);
+  }, [searchQuery, selectedCategory, selectedLanguage, selectedMood, user]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadDiscoverWritings();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [loadDiscoverWritings]);
 
   return (
     <CommunityLayout>
       <div className="space-y-10">
-        
         {/* Header */}
         <div className="space-y-3 max-w-xl">
           <span className="text-xs font-mono uppercase tracking-widest text-ankahe-gold">
@@ -137,7 +121,6 @@ export const Discover: React.FC = () => {
 
         {/* Multi-Filter Controls */}
         <div className="space-y-5 bg-ankahe-secondary/50 p-6 rounded-2xl border border-ankahe-border/80 text-xs">
-          
           {/* 1. Category Filters */}
           <div className="space-y-2">
             <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
@@ -160,104 +143,123 @@ export const Discover: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Language Filters */}
-          <div className="space-y-2 pt-2 border-t border-ankahe-border/50">
-            <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
-              Language:
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {languages.map((lang) => (
-                <button
-                  key={lang}
-                  onClick={() => setSelectedLanguage(lang)}
-                  className={`px-3 py-1 rounded-lg transition-colors ${
-                    selectedLanguage === lang
-                      ? 'bg-ankahe-gold/20 text-ankahe-gold border border-ankahe-gold/40 font-medium'
-                      : 'bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-text'
-                  }`}
-                >
-                  {lang}
-                </button>
-              ))}
+          {/* 2. Language & Mood Split Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-ankahe-border/50">
+            {/* Language */}
+            <div className="space-y-2">
+              <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
+                Language / भाषा:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {languages.map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => setSelectedLanguage(lang)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      selectedLanguage === lang
+                        ? 'bg-ankahe-gold/25 text-ankahe-gold border border-ankahe-gold/40 font-medium'
+                        : 'bg-ankahe-elevated/60 text-ankahe-muted hover:text-ankahe-text'
+                    }`}
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mood / Category */}
+            <div className="space-y-2">
+              <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
+                Atmosphere / भावना:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {moods.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setSelectedMood(m.value)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      selectedMood === m.value
+                        ? 'bg-ankahe-gold/25 text-ankahe-gold border border-ankahe-gold/40 font-medium'
+                        : 'bg-ankahe-elevated/60 text-ankahe-muted hover:text-ankahe-text'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-
-          {/* 3. Mood Preference (Browsing preference, not inferred state) */}
-          <div className="space-y-2 pt-2 border-t border-ankahe-border/50">
-            <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
-              Emotional Tone / Feeling:
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {moods.map((m) => (
-                <button
-                  key={m.value}
-                  onClick={() => setSelectedMood(m.value)}
-                  className={`px-3 py-1 rounded-lg transition-colors ${
-                    selectedMood === m.value
-                      ? 'bg-ankahe-gold/20 text-ankahe-gold border border-ankahe-gold/40 font-medium'
-                      : 'bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-text'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
         </div>
 
-        {/* Results Counter & Active Notice */}
-        <div className="flex items-center justify-between text-xs text-ankahe-muted/70">
-          <span>
-            Found {filteredWritings.length} {filteredWritings.length === 1 ? 'piece' : 'pieces'}
-          </span>
-          {hasActiveFilters && (
-            <span className="font-mono text-[11px] text-ankahe-gold">
-              Active filters applied
-            </span>
-          )}
-        </div>
-
-        {/* Filtered Results Grid */}
-        {filteredWritings.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            {filteredWritings.map((item) => (
-              <CommunityWritingCard
-                key={item.id}
-                item={item}
-                onOpen={(piece) => setSelectedItem(piece)}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Empty State (Section 7 Requirement) */
-          <div className="text-center py-20 px-6 rounded-3xl bg-ankahe-secondary/30 border border-dashed border-ankahe-border space-y-4 max-w-lg mx-auto">
-            <Filter size={24} className="mx-auto text-ankahe-muted/40" />
-            <h3 className="font-serif text-xl text-ankahe-text font-normal">
-              No words found this time.
-            </h3>
-            <p className="text-sm text-ankahe-muted font-light leading-relaxed">
-              Try another language, adjust your search, or follow a different feeling.
+        {/* Discovery Results */}
+        {loading ? (
+          <div className="py-20 text-center space-y-4">
+            <div className="w-8 h-8 rounded-full border-2 border-ankahe-gold/30 border-t-ankahe-gold animate-spin mx-auto" />
+            <p className="font-serif italic text-sm text-ankahe-muted">
+              Discovering resonance...
             </p>
-            <div className="pt-2">
+          </div>
+        ) : writings.length === 0 ? (
+          <div className="p-12 rounded-3xl bg-ankahe-secondary/30 border border-ankahe-border text-center space-y-4 max-w-md mx-auto">
+            <div className="w-12 h-12 rounded-full bg-ankahe-elevated border border-ankahe-border flex items-center justify-center mx-auto text-ankahe-gold">
+              <Compass size={20} />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-serif text-xl text-ankahe-text font-normal">
+                {hasActiveFilters
+                  ? 'No words match this query.'
+                  : "Nothing here just yet."}
+              </h3>
+              <p className="text-xs text-ankahe-muted font-light leading-relaxed">
+                {hasActiveFilters
+                  ? 'Try relaxing your filters or searching for different sentiments.'
+                  : "When someone shares their words, you'll find them here."}
+              </p>
+            </div>
+
+            {hasActiveFilters ? (
               <button
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-ankahe-elevated hover:bg-ankahe-secondary text-xs text-ankahe-gold border border-ankahe-gold/30 transition-colors"
+                className="px-4 py-2 rounded-full bg-ankahe-elevated hover:bg-ankahe-secondary border border-ankahe-border text-xs text-ankahe-gold transition-colors inline-flex items-center gap-1.5"
               >
                 <RotateCcw size={12} />
-                <span>Clear all filters</span>
+                <span>Reset all filters</span>
               </button>
+            ) : (
+              <Link
+                to="/write"
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-xs font-medium shadow-sm transition-colors"
+              >
+                <Feather size={12} />
+                <span>Share your writing</span>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between text-xs text-ankahe-muted/60">
+              <span>Found {writings.length} {writings.length === 1 ? 'piece' : 'pieces'}</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              {writings.map((writing) => (
+                <CommunityWritingCard
+                  key={writing.id}
+                  item={writing}
+                  onOpen={(item) => setSelectedItem(item)}
+                />
+              ))}
             </div>
           </div>
         )}
 
+        {/* Modal Reader */}
+        <WritingReaderModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+        />
       </div>
-
-      {/* Reader Modal */}
-      <WritingReaderModal
-        item={selectedItem}
-        onClose={() => setSelectedItem(null)}
-      />
     </CommunityLayout>
   );
 };

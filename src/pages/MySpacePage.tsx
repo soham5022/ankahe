@@ -1,29 +1,90 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { BookMarked, Feather, Lock, Bookmark, AlertCircle, Trash2, Edit3 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  BookMarked, 
+  Feather, 
+  Lock, 
+  Bookmark, 
+  Trash2, 
+  Edit3, 
+  Mail, 
+  ExternalLink 
+} from 'lucide-react';
 import { CommunityLayout } from '../components/community/CommunityLayout';
 import { CommunityWritingCard } from '../components/community/CommunityWritingCard';
 import { WritingReaderModal } from '../components/community/WritingReaderModal';
+import { useAuth } from '../context/AuthContext';
 import { useCommunity } from '../context/CommunityContext';
-import type { WritingItem } from '../types';
+import { 
+  fetchUserWritings, 
+  fetchUserSavedWritings, 
+  deleteWriting 
+} from '../lib/writingsService';
+import type { WritingItem, DraftItem } from '../types';
 
 export const MySpacePage: React.FC = () => {
-  const { writings, drafts, savedPieceIds, userProfile, deleteDraft, updateProfile } = useCommunity();
-  const [activeTab, setActiveTab] = useState<'writings' | 'drafts' | 'saved' | 'preferences'>('drafts');
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useCommunity();
+
+  const [activeTab, setActiveTab] = useState<'drafts' | 'writings' | 'letters' | 'saved'>('drafts');
+  const [drafts, setDrafts] = useState<DraftItem[]>([]);
+  const [publishedWritings, setPublishedWritings] = useState<WritingItem[]>([]);
+  const [savedWritings, setSavedWritings] = useState<WritingItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<WritingItem | null>(null);
 
-  // User's own writing added during this session
-  const mySessionWritings = writings.filter(
-    (w) => w.author === userProfile.penName || w.id.startsWith('community-')
-  );
+  const loadUserContent = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
 
-  // Saved pieces
-  const savedPieces = writings.filter((w) => savedPieceIds.includes(w.id));
+    const [userRes, savedRes] = await Promise.all([
+      fetchUserWritings(user.id),
+      fetchUserSavedWritings(user.id),
+    ]);
+
+    setDrafts(userRes.drafts);
+    setPublishedWritings(userRes.writings);
+    setSavedWritings(savedRes.writings);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    loadUserContent();
+  }, [loadUserContent]);
+
+  const handleDeleteDraft = async (id: string) => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to remove this draft?")) return;
+
+    const { success, error } = await deleteWriting(id, user.id);
+    if (success) {
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
+      showToast("Draft removed safely.");
+    } else {
+      showToast(error || "Could not delete draft.");
+    }
+  };
+
+  const handleDeletePublished = async (id: string) => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to delete this writing from ANKAHE?")) return;
+
+    const { success, error } = await deleteWriting(id, user.id);
+    if (success) {
+      setPublishedWritings((prev) => prev.filter((w) => w.id !== id));
+      showToast("Writing deleted.");
+    } else {
+      showToast(error || "Could not delete writing.");
+    }
+  };
+
+  // Filter unsent letters from published writings
+  const myLetters = publishedWritings.filter((w) => w.type === 'Unsent Letter');
 
   return (
     <CommunityLayout>
       <div className="space-y-10 max-w-4xl mx-auto">
-        
         {/* Header */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-ankahe-gold">
@@ -36,18 +97,7 @@ export const MySpacePage: React.FC = () => {
           </h1>
 
           <p className="text-sm text-ankahe-muted font-light leading-relaxed">
-            Where your drafts, quiet bookmarks, and private reflections stay during your visit.
-          </p>
-        </div>
-
-        {/* Phase 2 Prototype Storage Notice (Section 11 Requirement) */}
-        <div className="p-4 rounded-xl bg-ankahe-secondary/60 border border-ankahe-border text-xs text-ankahe-muted space-y-1">
-          <div className="flex items-center gap-1.5 font-medium text-ankahe-gold">
-            <AlertCircle size={13} />
-            <span>Phase 2 Session Storage Notice</span>
-          </div>
-          <p className="leading-relaxed">
-            Your writing and drafts are currently stored in browser session memory. Account-based permanent cloud storage across devices will be activated in Phase 3.
+            Where your drafts, quiet bookmarks, and private reflections stay safe.
           </p>
         </div>
 
@@ -65,17 +115,6 @@ export const MySpacePage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('saved')}
-            className={`px-4 py-2 rounded-xl transition-colors font-medium ${
-              activeTab === 'saved'
-                ? 'bg-ankahe-paper text-ankahe-ink shadow-sm'
-                : 'text-ankahe-muted hover:text-ankahe-text hover:bg-ankahe-secondary'
-            }`}
-          >
-            Saved Pieces ({savedPieces.length})
-          </button>
-
-          <button
             onClick={() => setActiveTab('writings')}
             className={`px-4 py-2 rounded-xl transition-colors font-medium ${
               activeTab === 'writings'
@@ -83,209 +122,322 @@ export const MySpacePage: React.FC = () => {
                 : 'text-ankahe-muted hover:text-ankahe-text hover:bg-ankahe-secondary'
             }`}
           >
-            Session Posts ({mySessionWritings.length})
+            Published Pieces ({publishedWritings.length})
           </button>
 
           <button
-            onClick={() => setActiveTab('preferences')}
+            onClick={() => setActiveTab('letters')}
             className={`px-4 py-2 rounded-xl transition-colors font-medium ${
-              activeTab === 'preferences'
+              activeTab === 'letters'
                 ? 'bg-ankahe-paper text-ankahe-ink shadow-sm'
                 : 'text-ankahe-muted hover:text-ankahe-text hover:bg-ankahe-secondary'
             }`}
           >
-            Reading Preferences
+            My Unsent Letters ({myLetters.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('saved')}
+            className={`px-4 py-2 rounded-xl transition-colors font-medium ${
+              activeTab === 'saved'
+                ? 'bg-ankahe-paper text-ankahe-ink shadow-sm'
+                : 'text-ankahe-muted hover:text-ankahe-text hover:bg-ankahe-secondary'
+            }`}
+          >
+            Saved Collection ({savedWritings.length})
           </button>
         </div>
 
-        {/* Tab 1: Private Drafts */}
-        {activeTab === 'drafts' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between text-xs text-ankahe-muted">
-              <span>Drafts in this browser session</span>
-              <Link
-                to="/write"
-                className="inline-flex items-center gap-1.5 text-ankahe-gold hover:text-ankahe-gold-light"
-              >
-                <Feather size={12} />
-                <span>Start new draft</span>
-              </Link>
-            </div>
-
-            {drafts.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {drafts.map((draft) => (
-                  <div
-                    key={draft.id}
-                    className="p-6 rounded-2xl bg-ankahe-secondary/80 border border-ankahe-border space-y-4 text-xs text-ankahe-text"
+        {/* Content Tabs */}
+        {loading ? (
+          <div className="py-20 text-center space-y-4">
+            <div className="w-8 h-8 rounded-full border-2 border-ankahe-gold/30 border-t-ankahe-gold animate-spin mx-auto" />
+            <p className="font-serif italic text-sm text-ankahe-muted">
+              Loading your quiet sanctuary...
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Tab 1: Private Drafts */}
+            {activeTab === 'drafts' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between text-xs text-ankahe-muted">
+                  <span>Kept strictly for your eyes</span>
+                  <Link
+                    to="/write"
+                    className="inline-flex items-center gap-1.5 text-ankahe-gold hover:text-ankahe-gold-light"
                   >
-                    <div className="flex items-center justify-between text-ankahe-muted pb-2 border-b border-dashed border-ankahe-border/60">
-                      <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-500">
-                        <Lock size={11} />
-                        <span>Private Draft</span>
+                    <Feather size={12} />
+                    <span>Start new draft</span>
+                  </Link>
+                </div>
+
+                {drafts.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {drafts.map((draft) => (
+                      <div
+                        key={draft.id}
+                        className="p-6 rounded-2xl bg-ankahe-secondary/80 border border-ankahe-border space-y-4 text-xs text-ankahe-text flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-ankahe-muted pb-2 border-b border-dashed border-ankahe-border/60">
+                            <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-500">
+                              <Lock size={11} />
+                              <span>Private Draft</span>
+                            </div>
+                            <span className="font-mono text-[10px]">{draft.savedAt}</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            {draft.title && (
+                              <h4 className="font-serif text-base text-ankahe-text font-medium">
+                                {draft.title}
+                              </h4>
+                            )}
+                            <p className="font-serif italic text-sm text-ankahe-muted line-clamp-3 leading-relaxed">
+                              "{draft.content}"
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-dashed border-ankahe-border/60 flex items-center justify-between">
+                          <span className="font-mono text-[11px] text-ankahe-muted">
+                            {draft.type} • {draft.language}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate(`/write?edit=${draft.id}`)}
+                              className="p-1.5 rounded-lg text-ankahe-muted hover:text-ankahe-gold hover:bg-ankahe-elevated transition-colors"
+                              title="Edit draft"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDraft(draft.id)}
+                              className="p-1.5 rounded-lg text-ankahe-muted hover:text-red-400 hover:bg-ankahe-elevated transition-colors"
+                              title="Delete draft"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <span className="font-mono text-[10px]">{draft.savedAt}</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h4 className="font-serif text-base text-ankahe-text font-medium">
-                        {draft.title}
-                      </h4>
-                      <p className="font-serif italic text-sm text-ankahe-muted line-clamp-3 leading-relaxed">
-                        "{draft.content}"
-                      </p>
-                    </div>
-
-                    <div className="pt-3 border-t border-dashed border-ankahe-border/60 flex items-center justify-between">
-                      <span className="font-mono text-[11px] text-ankahe-muted">
-                        {draft.language} • {draft.type}
-                      </span>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => deleteDraft(draft.id)}
-                          className="p-1.5 text-ankahe-muted hover:text-rose-400 transition-colors"
-                          title="Delete draft"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-
-                        <Link
-                          to={`/write?type=${encodeURIComponent(draft.type)}`}
-                          className="inline-flex items-center gap-1 text-ankahe-gold hover:text-ankahe-gold-light font-medium"
-                        >
-                          <span>Continue writing</span>
-                          <Edit3 size={11} />
-                        </Link>
-                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 rounded-3xl bg-ankahe-secondary/30 border border-ankahe-border text-center space-y-3 max-w-md mx-auto">
+                    <Lock size={20} className="mx-auto text-emerald-500/80" />
+                    <h3 className="font-serif text-lg text-ankahe-text">
+                      You haven't saved a draft yet.
+                    </h3>
+                    <p className="text-xs text-ankahe-muted font-light leading-relaxed">
+                      Write down a fleeting memory or an unpolished line. It remains strictly yours.
+                    </p>
+                    <div className="pt-2">
+                      <Link
+                        to="/write"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ankahe-paper text-ankahe-ink text-xs font-medium"
+                      >
+                        <Feather size={12} />
+                        <span>Write a draft</span>
+                      </Link>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 rounded-2xl bg-ankahe-secondary/30 border border-dashed border-ankahe-border space-y-3">
-                <Lock size={20} className="mx-auto text-ankahe-muted/40" />
-                <p className="font-serif text-base text-ankahe-text">No drafts in this session.</p>
-                <Link
-                  to="/write"
-                  className="inline-flex items-center gap-1.5 text-xs text-ankahe-gold hover:text-ankahe-gold-light"
-                >
-                  <Feather size={12} />
-                  <span>Write something now</span>
-                </Link>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Tab 2: Saved Pieces */}
-        {activeTab === 'saved' && (
-          <div className="space-y-6">
-            <span className="text-xs text-ankahe-muted block">
-              Pieces you have bookmarked softly during your reading
-            </span>
+            {/* Tab 2: Published Pieces */}
+            {activeTab === 'writings' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between text-xs text-ankahe-muted">
+                  <span>Words you've shared with the circle</span>
+                  <Link
+                    to="/write"
+                    className="inline-flex items-center gap-1.5 text-ankahe-gold hover:text-ankahe-gold-light"
+                  >
+                    <Feather size={12} />
+                    <span>Write new piece</span>
+                  </Link>
+                </div>
 
-            {savedPieces.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {savedPieces.map((piece) => (
-                  <CommunityWritingCard
-                    key={piece.id}
-                    item={piece}
-                    onOpen={(item) => setSelectedItem(item)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 rounded-2xl bg-ankahe-secondary/30 border border-dashed border-ankahe-border space-y-3">
-                <Bookmark size={20} className="mx-auto text-ankahe-muted/40" />
-                <p className="font-serif text-base text-ankahe-text">No saved pieces yet.</p>
-                <p className="text-xs text-ankahe-muted">Click the bookmark icon on any piece while browsing.</p>
+                {publishedWritings.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {publishedWritings.map((writing) => (
+                      <div
+                        key={writing.id}
+                        className="p-6 rounded-2xl bg-ankahe-secondary/80 border border-ankahe-border space-y-4 text-xs text-ankahe-text flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-ankahe-muted pb-2 border-b border-dashed border-ankahe-border/60">
+                            <span className="font-mono text-[11px] text-ankahe-gold">
+                              {writing.isAnonymous ? 'Shared Anonymously' : 'Publicly Shared'}
+                            </span>
+                            <span className="font-mono text-[10px]">{writing.dateApprox}</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            {writing.title && (
+                              <h4 className="font-serif text-base text-ankahe-text font-medium">
+                                {writing.title}
+                              </h4>
+                            )}
+                            <p className="font-serif text-sm text-ankahe-muted line-clamp-3 leading-relaxed">
+                              {writing.content}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-dashed border-ankahe-border/60 flex items-center justify-between">
+                          <span className="font-mono text-[11px] text-ankahe-muted">
+                            {writing.type} • {writing.language}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/writing/${writing.id}`}
+                              className="p-1.5 rounded-lg text-ankahe-muted hover:text-ankahe-text hover:bg-ankahe-elevated transition-colors"
+                              title="View reading page"
+                            >
+                              <ExternalLink size={13} />
+                            </Link>
+                            <button
+                              onClick={() => navigate(`/write?edit=${writing.id}`)}
+                              className="p-1.5 rounded-lg text-ankahe-muted hover:text-ankahe-gold hover:bg-ankahe-elevated transition-colors"
+                              title="Edit piece"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePublished(writing.id)}
+                              className="p-1.5 rounded-lg text-ankahe-muted hover:text-red-400 hover:bg-ankahe-elevated transition-colors"
+                              title="Delete piece"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 rounded-3xl bg-ankahe-secondary/30 border border-ankahe-border text-center space-y-3 max-w-md mx-auto">
+                    <Feather size={20} className="mx-auto text-ankahe-gold" />
+                    <h3 className="font-serif text-lg text-ankahe-text">
+                      Your words can begin here.
+                    </h3>
+                    <p className="text-xs text-ankahe-muted font-light leading-relaxed">
+                      You haven't published anything to the community yet. Whenever you are ready, the circle is listening.
+                    </p>
+                    <div className="pt-2">
+                      <Link
+                        to="/write"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ankahe-paper text-ankahe-ink text-xs font-medium"
+                      >
+                        <Feather size={12} />
+                        <span>Share your first words</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Tab 3: Session Posts */}
-        {activeTab === 'writings' && (
-          <div className="space-y-6">
-            <span className="text-xs text-ankahe-muted block">
-              Writing placed gently into the in-memory community feed during this visit
-            </span>
+            {/* Tab 3: My Unsent Letters */}
+            {activeTab === 'letters' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between text-xs text-ankahe-muted">
+                  <span>Letters you've set down in ink</span>
+                  <Link
+                    to="/write?type=Unsent%20Letter"
+                    className="inline-flex items-center gap-1.5 text-ankahe-gold hover:text-ankahe-gold-light"
+                  >
+                    <Mail size={12} />
+                    <span>Write an unsent letter</span>
+                  </Link>
+                </div>
 
-            {mySessionWritings.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {mySessionWritings.map((piece) => (
-                  <CommunityWritingCard
-                    key={piece.id}
-                    item={piece}
-                    onOpen={(item) => setSelectedItem(item)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 rounded-2xl bg-ankahe-secondary/30 border border-dashed border-ankahe-border space-y-3">
-                <Feather size={20} className="mx-auto text-ankahe-muted/40" />
-                <p className="font-serif text-base text-ankahe-text">You haven't posted any pieces in this session.</p>
-                <Link
-                  to="/write"
-                  className="inline-flex items-center gap-1.5 text-xs text-ankahe-gold hover:text-ankahe-gold-light"
-                >
-                  <span>Open writing studio</span>
-                </Link>
+                {myLetters.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {myLetters.map((letter) => (
+                      <CommunityWritingCard
+                        key={letter.id}
+                        item={letter}
+                        onOpen={(item) => setSelectedItem(item)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 rounded-3xl bg-ankahe-secondary/30 border border-ankahe-border text-center space-y-3 max-w-md mx-auto">
+                    <Mail size={20} className="mx-auto text-ankahe-gold" />
+                    <h3 className="font-serif text-lg text-ankahe-text">
+                      No letters written yet.
+                    </h3>
+                    <p className="text-xs text-ankahe-muted font-light leading-relaxed">
+                      Write to someone you miss, your younger self, or the future.
+                    </p>
+                    <div className="pt-2">
+                      <Link
+                        to="/write?type=Unsent%20Letter"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ankahe-paper text-ankahe-ink text-xs font-medium"
+                      >
+                        <Mail size={12} />
+                        <span>Write an unsent letter</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Tab 4: Reading Preferences */}
-        {activeTab === 'preferences' && (
-          <div className="bg-ankahe-secondary/60 rounded-2xl p-7 border border-ankahe-border space-y-6 max-w-xl text-xs">
-            <h3 className="font-serif text-lg text-ankahe-text font-medium">
-              Reading & Language Preferences
-            </h3>
+            {/* Tab 4: Saved Writings */}
+            {activeTab === 'saved' && (
+              <div className="space-y-6">
+                <div className="text-xs text-ankahe-muted">
+                  <span>Writings you have held onto</span>
+                </div>
 
-            <div className="space-y-3">
-              <label className="font-mono text-[11px] text-ankahe-muted uppercase tracking-wider block">
-                Languages You Read:
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['Hindi', 'Hinglish', 'Marathi', 'English', 'Urdu'].map((lang) => {
-                  const isSelected = userProfile.preferredLanguages.includes(lang as any);
-                  return (
-                    <button
-                      key={lang}
-                      onClick={() => {
-                        const updated = isSelected
-                          ? userProfile.preferredLanguages.filter((l) => l !== lang)
-                          : [...userProfile.preferredLanguages, lang as any];
-                        updateProfile({ preferredLanguages: updated });
-                      }}
-                      className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                        isSelected
-                          ? 'bg-ankahe-gold/20 text-ankahe-gold border-ankahe-gold/50 font-medium'
-                          : 'bg-ankahe-elevated text-ankahe-muted border-ankahe-border'
-                      }`}
-                    >
-                      {lang}
-                    </button>
-                  );
-                })}
+                {savedWritings.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {savedWritings.map((writing) => (
+                      <CommunityWritingCard
+                        key={writing.id}
+                        item={writing}
+                        onOpen={(item) => setSelectedItem(item)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 rounded-3xl bg-ankahe-secondary/30 border border-ankahe-border text-center space-y-3 max-w-md mx-auto">
+                    <Bookmark size={20} className="mx-auto text-ankahe-gold" />
+                    <h3 className="font-serif text-lg text-ankahe-text">
+                      The words you save will find a home here.
+                    </h3>
+                    <p className="text-xs text-ankahe-muted font-light leading-relaxed">
+                      Whenever you come across a poem or thought that stays with you, tap "Save" to keep it here.
+                    </p>
+                    <div className="pt-2">
+                      <Link
+                        to="/discover"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ankahe-paper text-ankahe-ink text-xs font-medium"
+                      >
+                        <span>Discover words</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-
-            <div className="pt-4 border-t border-ankahe-border/60 text-xs text-ankahe-muted/80 leading-relaxed">
-              <p>Preferences adjust default language highlighting and filter suggestions in this session.</p>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
+        {/* Modal Reader */}
+        <WritingReaderModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+        />
       </div>
-
-      {/* Reader Modal */}
-      <WritingReaderModal
-        item={selectedItem}
-        onClose={() => setSelectedItem(null)}
-      />
     </CommunityLayout>
   );
 };

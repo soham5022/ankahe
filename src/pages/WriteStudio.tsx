@@ -1,38 +1,79 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Feather, Eye, Edit3, Save, Check, Lock, Globe, UserCheck, AlertCircle, ArrowLeft } from 'lucide-react';
+import { 
+  Feather, 
+  Eye, 
+  Edit3, 
+  Save, 
+  Check, 
+  Lock, 
+  Globe, 
+  UserCheck, 
+  AlertCircle, 
+  ArrowLeft,
+  Trash2
+} from 'lucide-react';
 import { CommunityLayout } from '../components/community/CommunityLayout';
+import { useAuth } from '../context/AuthContext';
 import { useCommunity } from '../context/CommunityContext';
+import { 
+  createWriting, 
+  updateWriting, 
+  deleteWriting, 
+  fetchWritingById 
+} from '../lib/writingsService';
 import type { WritingType, Language, EmotionCategory, VisibilityPreference } from '../types';
 
 export const WriteStudio: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { addWriting, saveDraft, userProfile, showToast } = useCommunity();
+  const { user, profile } = useAuth();
+  const { showToast } = useCommunity();
 
   // URL pre-selection support
+  const editId = searchParams.get('edit');
   const initialType = (searchParams.get('type') as WritingType) || 'Thought';
 
   // Form State
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [type, setType] = useState<WritingType>(initialType);
-  const [language, setLanguage] = useState<Language>('Hinglish');
+  const [language, setLanguage] = useState<Language>(
+    (profile?.preferredLanguage as Language) || 'Hindi'
+  );
   const [mood, setMood] = useState<EmotionCategory>('peace');
   const [visibility, setVisibility] = useState<VisibilityPreference>('public');
   const [isPaperSurface, setIsPaperSurface] = useState(false);
 
-  // Preview Mode
+  // Status & UI States
   const [isPreview, setIsPreview] = useState(false);
-  const [draftSaved, setDraftSaved] = useState(false);
-  const [publishFeedback, setPublishFeedback] = useState<string | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Load existing writing if editing
   useEffect(() => {
-    const paramType = searchParams.get('type') as WritingType;
-    if (paramType) {
-      setType(paramType);
+    if (!editId) return;
+
+    async function loadForEdit() {
+      if (!editId) return;
+      const { writing, error } = await fetchWritingById(editId, user?.id);
+      if (error || !writing) {
+        showToast(error || "Could not load writing for editing.");
+        return;
+      }
+      setTitle(writing.title || '');
+      setContent(writing.content || '');
+      setType(writing.type);
+      setLanguage(writing.language);
+      setMood(writing.category as EmotionCategory);
+      setVisibility(writing.visibility || 'public');
+      setIsPaperSurface(Boolean(writing.isPaperStyle));
     }
-  }, [searchParams]);
+
+    loadForEdit();
+  }, [editId, user, showToast]);
 
   const contentTypes: WritingType[] = [
     'Thought',
@@ -46,7 +87,7 @@ export const WriteStudio: React.FC = () => {
     'Other',
   ];
 
-  const languages: Language[] = ['Hinglish', 'Hindi', 'Marathi', 'English', 'Urdu', 'Other'];
+  const languages: Language[] = ['Hindi', 'Hinglish', 'Marathi', 'English', 'Urdu', 'Other'];
 
   const moods: { label: string; value: EmotionCategory }[] = [
     { label: 'Peace', value: 'peace' },
@@ -75,55 +116,147 @@ export const WriteStudio: React.FC = () => {
     }
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
+    setErrorMessage(null);
     if (!content.trim()) {
-      showToast("Write a line before saving as a draft.");
+      setErrorMessage("Please write your words before saving a draft.");
       return;
     }
-    saveDraft({
-      title: title.trim() || 'Untitled reflection',
-      content: content.trim(),
-      type,
-      language,
-      category: mood,
-      visibility,
-    });
-    setDraftSaved(true);
-    setTimeout(() => setDraftSaved(false), 2400);
+    if (!user) {
+      setErrorMessage("You must be signed in to save drafts.");
+      return;
+    }
+
+    setIsSavingDraft(true);
+    if (editId) {
+      const { error } = await updateWriting(
+        editId,
+        {
+          title: title.trim() || null,
+          content: content.trim(),
+          type,
+          language,
+          mood,
+          visibility: 'private',
+          status: 'draft',
+        },
+        user.id
+      );
+      setIsSavingDraft(false);
+
+      if (error) {
+        setErrorMessage(error);
+      } else {
+        showToast("Draft updated safely in your library.");
+        navigate('/my-space');
+      }
+    } else {
+      const { error } = await createWriting(
+        {
+          title: title.trim() || undefined,
+          content: content.trim(),
+          type,
+          language,
+          mood,
+          visibility: 'private',
+          status: 'draft',
+        },
+        user.id
+      );
+      setIsSavingDraft(false);
+
+      if (error) {
+        setErrorMessage(error);
+      } else {
+        showToast("Draft saved safely to your private space.");
+        navigate('/my-space');
+      }
+    }
   };
 
-  const handlePublishPrototype = () => {
+  const handlePublish = async () => {
+    setErrorMessage(null);
     if (!content.trim()) {
-      showToast("Please write something before publishing.");
+      setErrorMessage("Please write something before publishing.");
+      return;
+    }
+    if (!user) {
+      setErrorMessage("You must be signed in to publish words.");
       return;
     }
 
     if (visibility === 'private') {
-      handleSaveDraft();
-      setPublishFeedback("Saved as private draft. It is held only in your session and will not appear in the public feed.");
+      await handleSaveDraft();
       return;
     }
 
-    const authorDisplay = visibility === 'anonymous' ? 'Anonymous' : userProfile.penName;
-    addWriting({
-      title: title.trim() || undefined,
-      content: content.trim(),
-      author: authorDisplay,
-      isAnonymous: visibility === 'anonymous',
-      type,
-      language,
-      category: mood,
-      visibility,
-      isPaperStyle: isPaperSurface,
-      scriptStyle: language === 'Hindi' || language === 'Marathi' ? 'devanagari' : language === 'Urdu' ? 'nastaliq' : 'serif',
-      dateApprox: 'Written in this session',
-    });
+    setIsPublishing(true);
+    if (editId) {
+      const { error } = await updateWriting(
+        editId,
+        {
+          title: title.trim() || null,
+          content: content.trim(),
+          type,
+          language,
+          mood,
+          visibility,
+          status: 'published',
+        },
+        user.id
+      );
+      setIsPublishing(false);
 
-    setPublishFeedback(
-      `Your piece has been placed gently into the in-memory session feed as ${
-        visibility === 'anonymous' ? 'an anonymous post' : `"${userProfile.penName}"`
-      }. Remember: This is a Phase 2 prototype demonstration; it exists in memory for this session.`
-    );
+      if (error) {
+        setErrorMessage(error);
+      } else {
+        showToast("Your writing has been updated and published.");
+        navigate('/home');
+      }
+    } else {
+      const { error } = await createWriting(
+        {
+          title: title.trim() || undefined,
+          content: content.trim(),
+          type,
+          language,
+          mood,
+          visibility,
+          status: 'published',
+        },
+        user.id
+      );
+      setIsPublishing(false);
+
+      if (error) {
+        setErrorMessage(error);
+      } else {
+        showToast(
+          visibility === 'anonymous'
+            ? "Published gently as Anonymous."
+            : `Published as ${profile?.displayName || 'Writer'}.`
+        );
+        navigate('/home');
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editId || !user) return;
+    if (!window.confirm("Are you sure you want to delete this piece? This cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    const { success, error } = await deleteWriting(editId, user.id);
+    setIsDeleting(false);
+
+    if (success) {
+      showToast("Piece removed from your sanctuary.");
+      navigate('/my-space');
+    } else {
+      showToast(error || "Could not delete piece.");
+    }
   };
 
   const isUrdu = language === 'Urdu';
@@ -132,398 +265,342 @@ export const WriteStudio: React.FC = () => {
   return (
     <CommunityLayout>
       <div className="space-y-10 max-w-3xl mx-auto">
-        
-        {/* ========================================================
-            INTRODUCTORY COPY (Section 8 Requirements)
-            ======================================================== */}
+        {/* Header */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-ankahe-gold">
-            <Feather size={13} />
-            <span>Writing Studio • लेखणी</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-ankahe-gold">
+              <Feather size={13} />
+              <span>{editId ? 'Edit Writing • संपादन' : 'Writing Sanctuary • लेखन'}</span>
+            </div>
+
+            {editId && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs text-red-400 hover:bg-red-950/30 border border-red-900/40 transition-colors"
+              >
+                <Trash2 size={12} />
+                <span>Delete</span>
+              </button>
+            )}
           </div>
 
           <h1 className="font-serif text-3xl sm:text-4xl text-ankahe-text font-normal">
-            Take your time.
+            Put your words where they belong.
           </h1>
 
-          <p className="font-serif text-base sm:text-lg text-ankahe-muted font-light leading-relaxed">
-            You don't need the perfect words. Start with whatever is on your mind.
+          <p className="text-sm text-ankahe-muted font-light leading-relaxed">
+            A quiet blank page. No timers, no character counts, no distractions.
           </p>
         </div>
 
-        {/* Prototype Transparency Notice */}
-        <div className="bg-ankahe-secondary/60 rounded-xl p-4 border border-ankahe-border text-xs text-ankahe-muted space-y-1">
-          <div className="flex items-center gap-1.5 font-medium text-ankahe-gold">
-            <AlertCircle size={13} />
-            <span>Honest Session Notice</span>
+        {errorMessage && (
+          <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-xs text-red-200 flex items-start gap-2.5 animate-in fade-in">
+            <AlertCircle size={15} className="shrink-0 mt-0.5 text-red-400" />
+            <span className="leading-relaxed">{errorMessage}</span>
           </div>
-          <p className="leading-relaxed">
-            Phase 2 stores drafts and demonstration posts strictly in browser application memory. Nothing is sent to external cloud databases until Phase 3 account activation.
-          </p>
-        </div>
+        )}
 
-        {/* Preview / Edit Toggle Bar */}
-        <div className="flex items-center justify-between pb-3 border-b border-ankahe-border/60 text-xs">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsPreview(false)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                !isPreview
-                  ? 'bg-ankahe-elevated text-ankahe-gold font-medium border border-ankahe-border'
-                  : 'text-ankahe-muted hover:text-ankahe-text'
-              }`}
-            >
-              <Edit3 size={13} />
-              <span>Editor</span>
-            </button>
-
-            <button
-              onClick={() => setIsPreview(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                isPreview
-                  ? 'bg-ankahe-elevated text-ankahe-gold font-medium border border-ankahe-border'
-                  : 'text-ankahe-muted hover:text-ankahe-text'
-              }`}
-            >
-              <Eye size={13} />
-              <span>Preview</span>
-            </button>
+        {/* Studio Controls Header (Format & Language Selectors) */}
+        <div className="bg-ankahe-secondary/50 p-6 rounded-2xl border border-ankahe-border space-y-5 text-xs">
+          {/* Format / Type */}
+          <div className="space-y-2">
+            <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
+              Format / प्रकार:
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {contentTypes.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
+                    type === t
+                      ? 'bg-ankahe-paper text-ankahe-ink font-medium shadow-sm'
+                      : 'bg-ankahe-elevated text-ankahe-muted hover:text-ankahe-text'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Word Count */}
-          <span className="font-mono text-ankahe-muted/60 text-[11px]">
-            {content.trim() ? `${content.trim().split(/\s+/).length} words` : 'Blank page'}
-          </span>
-        </div>
-
-        {/* ========================================================
-            EDITOR FORM / PREVIEW
-            ======================================================== */}
-        {!isPreview ? (
-          <div className="space-y-6">
-            
-            {/* Metadata Selectors (Type, Language, Mood) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              {/* Content Type */}
-              <div className="space-y-1.5">
-                <label className="font-mono text-[11px] text-ankahe-muted uppercase tracking-wider block">
-                  Content Type:
-                </label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as WritingType)}
-                  className="w-full bg-ankahe-secondary border border-ankahe-border rounded-xl px-3 py-2 text-xs text-ankahe-text focus:outline-none focus:border-ankahe-gold"
-                >
-                  {contentTypes.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Language */}
-              <div className="space-y-1.5">
-                <label className="font-mono text-[11px] text-ankahe-muted uppercase tracking-wider block">
-                  Language:
-                </label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as Language)}
-                  className="w-full bg-ankahe-secondary border border-ankahe-border rounded-xl px-3 py-2 text-xs text-ankahe-text focus:outline-none focus:border-ankahe-gold"
-                >
-                  {languages.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Emotional Mood / Tone */}
-              <div className="space-y-1.5">
-                <label className="font-mono text-[11px] text-ankahe-muted uppercase tracking-wider block">
-                  Feeling / Tone:
-                </label>
-                <select
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value as EmotionCategory)}
-                  className="w-full bg-ankahe-secondary border border-ankahe-border rounded-xl px-3 py-2 text-xs text-ankahe-text focus:outline-none focus:border-ankahe-gold"
-                >
-                  {moods.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+          {/* Language & Mood Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-ankahe-border/50">
+            {/* Language */}
+            <div className="space-y-2">
+              <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
+                Language / भाषा:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {languages.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setLanguage(l)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      language === l
+                        ? 'bg-ankahe-gold/25 text-ankahe-gold border border-ankahe-gold/40 font-medium'
+                        : 'bg-ankahe-elevated/60 text-ankahe-muted hover:text-ankahe-text'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Optional Title */}
-            <div className="space-y-1.5">
-              <label className="font-mono text-[11px] text-ankahe-muted uppercase tracking-wider block">
-                Title (Optional):
-              </label>
+            {/* Atmosphere / Mood */}
+            <div className="space-y-2">
+              <span className="font-mono text-[11px] text-ankahe-muted/70 uppercase tracking-wider block">
+                Atmosphere / भावना:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {moods.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setMood(m.value)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      mood === m.value
+                        ? 'bg-ankahe-gold/25 text-ankahe-gold border border-ankahe-gold/40 font-medium'
+                        : 'bg-ankahe-elevated/60 text-ankahe-muted hover:text-ankahe-text'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Paper Canvas Toggle */}
+          <div className="pt-3 border-t border-ankahe-border/50 flex items-center justify-between">
+            <span className="text-ankahe-muted">
+              Warm Paper Canvas (renders on soft ivory surface):
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsPaperSurface(!isPaperSurface)}
+              className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+                isPaperSurface
+                  ? 'bg-ankahe-paper text-ankahe-ink font-medium'
+                  : 'bg-ankahe-elevated text-ankahe-muted'
+              }`}
+            >
+              {isPaperSurface ? 'Paper Active' : 'Midnight Dark'}
+            </button>
+          </div>
+        </div>
+
+        {/* Main Writing Canvas */}
+        <div
+          className={`rounded-3xl border p-6 sm:p-10 space-y-6 transition-all duration-300 ${
+            isPaperSurface
+              ? 'paper-surface border-ankahe-paper-border text-ankahe-paper-dark shadow-paper'
+              : 'bg-ankahe-secondary/80 border-ankahe-border text-ankahe-text'
+          }`}
+        >
+          {/* Mode Tabs: Edit vs Preview */}
+          <div className="flex items-center justify-between pb-3 border-b border-dashed border-ankahe-border/60">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPreview(false)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs transition-colors ${
+                  !isPreview
+                    ? 'bg-ankahe-gold/25 text-ankahe-gold font-medium'
+                    : 'text-ankahe-muted hover:text-ankahe-text'
+                }`}
+              >
+                <Edit3 size={12} />
+                <span>Writing</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPreview(true)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs transition-colors ${
+                  isPreview
+                    ? 'bg-ankahe-gold/25 text-ankahe-gold font-medium'
+                    : 'text-ankahe-muted hover:text-ankahe-text'
+                }`}
+              >
+                <Eye size={12} />
+                <span>Preview</span>
+              </button>
+            </div>
+
+            <span className="font-mono text-[11px] opacity-60">
+              {language} • {type}
+            </span>
+          </div>
+
+          {!isPreview ? (
+            <div className="space-y-4">
+              {/* Optional Title Input */}
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Give your words a title, or leave it quiet..."
-                className="w-full bg-ankahe-secondary border border-ankahe-border rounded-xl px-4 py-2.5 text-sm text-ankahe-text placeholder-ankahe-muted/50 focus:outline-none focus:border-ankahe-gold"
+                placeholder="Title (Optional)"
+                className={`w-full bg-transparent border-b border-dashed focus:outline-none py-2 font-serif text-xl sm:text-2xl placeholder:opacity-40 ${
+                  isPaperSurface
+                    ? 'border-ankahe-paper-border text-ankahe-paper-dark placeholder:text-ankahe-paper-dark/40'
+                    : 'border-ankahe-border text-ankahe-text placeholder:text-ankahe-muted'
+                }`}
               />
-            </div>
 
-            {/* Writing Area with Warm Paper Toggle */}
-            <div 
-              className={`rounded-2xl p-6 sm:p-8 transition-all border ${
-                isPaperSurface
-                  ? 'paper-surface border-ankahe-paper-border shadow-paper text-ankahe-paper-dark'
-                  : 'bg-ankahe-secondary border-ankahe-border text-ankahe-text shadow-subtle'
-              }`}
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-dashed border-ankahe-border/60 text-xs mb-4">
-                <span className="font-mono text-[11px] opacity-70">
-                  Writing Desk ({language})
-                </span>
-
-                <label className="flex items-center gap-1.5 cursor-pointer text-xs select-none">
-                  <input
-                    type="checkbox"
-                    checked={isPaperSurface}
-                    onChange={(e) => setIsPaperSurface(e.target.checked)}
-                    className="rounded text-ankahe-gold focus:ring-0"
-                  />
-                  <span>Warm stationery texture</span>
-                </label>
-              </div>
-
+              {/* Main Content Area */}
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                rows={9}
+                rows={12}
                 dir={isUrdu ? 'rtl' : 'ltr'}
                 placeholder={getPlaceholder(language)}
-                className={`w-full bg-transparent border-0 resize-none focus:outline-none leading-relaxed text-base sm:text-xl ${
+                className={`w-full bg-transparent focus:outline-none resize-y leading-relaxed ${
                   isUrdu
-                    ? 'poetry-urdu text-right text-xl sm:text-2xl'
+                    ? 'poetry-urdu text-xl sm:text-2xl text-right'
                     : isDevanagari
-                    ? 'poetry-devanagari'
-                    : 'font-serif'
+                    ? 'poetry-devanagari text-base sm:text-lg font-normal'
+                    : 'font-serif text-base sm:text-lg font-light'
                 } ${
                   isPaperSurface
-                    ? 'text-ankahe-paper-dark placeholder-ankahe-paper-dark/40'
-                    : 'text-ankahe-text placeholder-ankahe-muted/40'
+                    ? 'text-ankahe-paper-dark placeholder:text-ankahe-paper-dark/40'
+                    : 'text-ankahe-text placeholder:text-ankahe-muted/40'
                 }`}
               />
             </div>
-
-            {/* Visibility Options (Section 8 Requirements) */}
-            <div className="bg-ankahe-secondary/50 rounded-2xl p-6 border border-ankahe-border space-y-4">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-ankahe-gold block">
-                Visibility Preference:
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                {/* 1. Public under pen name */}
-                <label
-                  onClick={() => setVisibility('public')}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all space-y-1.5 select-none ${
-                    visibility === 'public'
-                      ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-text'
-                      : 'border-ankahe-border hover:bg-ankahe-elevated/40 text-ankahe-muted'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 font-medium text-ankahe-gold">
-                    <UserCheck size={14} />
-                    <span>Public Pen Name</span>
-                  </div>
-                  <p className="text-[11px] text-ankahe-muted/80 leading-normal">
-                    Appears with your pen name "{userProfile.penName}".
-                  </p>
-                </label>
-
-                {/* 2. Anonymous public post */}
-                <label
-                  onClick={() => setVisibility('anonymous')}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all space-y-1.5 select-none ${
-                    visibility === 'anonymous'
-                      ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-text'
-                      : 'border-ankahe-border hover:bg-ankahe-elevated/40 text-ankahe-muted'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 font-medium text-ankahe-gold">
-                    <Globe size={14} />
-                    <span>Anonymous</span>
-                  </div>
-                  <p className="text-[11px] text-ankahe-muted/80 leading-normal">
-                    No pen name or profile link will be displayed on this piece.
-                  </p>
-                </label>
-
-                {/* 3. Private draft */}
-                <label
-                  onClick={() => setVisibility('private')}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all space-y-1.5 select-none ${
-                    visibility === 'private'
-                      ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-text'
-                      : 'border-ankahe-border hover:bg-ankahe-elevated/40 text-ankahe-muted'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 font-medium text-ankahe-gold">
-                    <Lock size={14} />
-                    <span>Private Draft</span>
-                  </div>
-                  <p className="text-[11px] text-ankahe-muted/80 leading-normal">
-                    Never shown in community discovery. Kept only in My Space.
-                  </p>
-                </label>
-              </div>
-
-              <p className="text-[11px] text-ankahe-muted/60 italic">
-                Note: In Phase 2, anonymous publishing omits all author identifiers. Technical guarantees will be formalized in Phase 3.
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-ankahe-border/60">
-              <button
-                onClick={handleSaveDraft}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-ankahe-secondary hover:bg-ankahe-elevated text-xs text-ankahe-text border border-ankahe-border hover:border-ankahe-gold/40 transition-colors"
+          ) : (
+            <div className="py-6 space-y-5">
+              {title && (
+                <h2 className="font-serif text-2xl sm:text-3xl font-medium">
+                  {title}
+                </h2>
+              )}
+              <div
+                dir={isUrdu ? 'rtl' : 'ltr'}
+                className={`whitespace-pre-wrap leading-relaxed ${
+                  isUrdu
+                    ? 'poetry-urdu text-2xl sm:text-3xl text-right'
+                    : isDevanagari
+                    ? 'poetry-devanagari text-lg sm:text-xl font-normal'
+                    : 'font-serif text-lg sm:text-xl font-light'
+                }`}
               >
-                {draftSaved ? <Check size={14} className="text-emerald-500" /> : <Save size={14} />}
-                <span>{draftSaved ? 'Draft Saved in Session' : 'Save as Private Draft'}</span>
-              </button>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={() => setIsPreview(true)}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-ankahe-secondary hover:bg-ankahe-elevated text-xs text-ankahe-muted hover:text-ankahe-text border border-ankahe-border transition-colors"
-                >
-                  <Eye size={13} />
-                  <span>Preview</span>
-                </button>
-
-                <button
-                  onClick={handlePublishPrototype}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-xs font-medium shadow-sm transition-colors"
-                >
-                  <Feather size={14} />
-                  <span>Place in Session Feed</span>
-                </button>
+                {content || <span className="italic opacity-50">Words will appear here...</span>}
+              </div>
+              <div className="pt-4 border-t border-dashed border-current/20 font-serif italic text-xs opacity-75">
+                — {visibility === 'anonymous' ? 'Anonymous' : profile?.displayName || 'A Quiet Soul'}
               </div>
             </div>
+          )}
+        </div>
 
-          </div>
-        ) : (
-          /* ========================================================
-              LIVE PREVIEW MODE
-              ======================================================== */
-          <div className="space-y-6">
-            <div className="flex items-center justify-between text-xs text-ankahe-muted pb-2 border-b border-ankahe-border/60">
-              <span className="font-mono text-ankahe-gold uppercase tracking-wider">
-                Live Preview Mode
-              </span>
+        {/* Publishing & Visibility Settings */}
+        <div className="bg-ankahe-secondary/50 p-6 rounded-2xl border border-ankahe-border space-y-4 text-xs">
+          <span className="font-mono text-[11px] text-ankahe-gold uppercase tracking-wider block">
+            Sharing & Visibility • प्रसिद्धी:
+          </span>
 
-              <button
-                onClick={() => setIsPreview(false)}
-                className="inline-flex items-center gap-1.5 text-xs text-ankahe-gold hover:text-ankahe-gold-light underline underline-offset-4"
-              >
-                <Edit3 size={13} />
-                <span>Return to editing</span>
-              </button>
-            </div>
-
-            {/* Rendered Preview Card */}
-            <div
-              className={`rounded-2xl p-8 sm:p-12 border shadow-paper transition-all ${
-                isPaperSurface
-                  ? 'paper-surface border-ankahe-paper-border text-ankahe-paper-dark'
-                  : 'bg-ankahe-secondary border-ankahe-border text-ankahe-text'
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => setVisibility('public')}
+              className={`p-3.5 rounded-xl border text-left transition-all space-y-1 ${
+                visibility === 'public'
+                  ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-gold'
+                  : 'bg-ankahe-secondary border-ankahe-border text-ankahe-muted hover:text-ankahe-text'
               }`}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-dashed border-ankahe-border/60 text-xs text-ankahe-gold-dark font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="uppercase">{type}</span>
-                  <span>•</span>
-                  <span>{language}</span>
-                  <span>•</span>
-                  <span className="capitalize">{mood}</span>
-                </div>
-                <span className="capitalize">{visibility}</span>
+              <div className="flex items-center gap-1.5 font-medium">
+                <Globe size={13} />
+                <span>Public Share</span>
               </div>
+              <p className="text-[10px] opacity-80 leading-relaxed">
+                Appears in Home & Discover under "{profile?.displayName || 'your pen name'}".
+              </p>
+            </button>
 
-              <div className="py-6 space-y-4">
-                {title && (
-                  <h3 className="font-serif text-2xl font-medium">
-                    {title}
-                  </h3>
-                )}
-
-                <div
-                  dir={isUrdu ? 'rtl' : 'ltr'}
-                  className={`leading-relaxed whitespace-pre-wrap ${
-                    isUrdu
-                      ? 'poetry-urdu text-2xl text-right'
-                      : isDevanagari
-                      ? 'poetry-devanagari text-lg'
-                      : 'font-serif text-lg font-light'
-                  }`}
-                >
-                  {content || <span className="opacity-40 italic">Nothing written yet...</span>}
-                </div>
+            <button
+              type="button"
+              onClick={() => setVisibility('anonymous')}
+              className={`p-3.5 rounded-xl border text-left transition-all space-y-1 ${
+                visibility === 'anonymous'
+                  ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-gold'
+                  : 'bg-ankahe-secondary border-ankahe-border text-ankahe-muted hover:text-ankahe-text'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-medium">
+                <UserCheck size={13} />
+                <span>Anonymous Share</span>
               </div>
+              <p className="text-[10px] opacity-80 leading-relaxed">
+                Publicly readable, but your pen name and identity remain hidden.
+              </p>
+            </button>
 
-              <div className="pt-4 border-t border-dashed border-ankahe-border/60 flex items-center justify-between text-xs opacity-80">
-                <span className="font-serif italic">
-                  — {visibility === 'anonymous' ? 'Anonymous' : userProfile.penName}
-                </span>
-                <span className="font-mono text-[11px]">Preview</span>
+            <button
+              type="button"
+              onClick={() => setVisibility('private')}
+              className={`p-3.5 rounded-xl border text-left transition-all space-y-1 ${
+                visibility === 'private'
+                  ? 'bg-ankahe-elevated border-ankahe-gold text-ankahe-gold'
+                  : 'bg-ankahe-secondary border-ankahe-border text-ankahe-muted hover:text-ankahe-text'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-medium">
+                <Lock size={13} />
+                <span>Private Draft</span>
               </div>
-            </div>
-
-            {/* Action inside preview */}
-            <div className="flex items-center justify-between pt-4">
-              <button
-                onClick={() => setIsPreview(false)}
-                className="inline-flex items-center gap-1.5 text-xs text-ankahe-muted hover:text-ankahe-text"
-              >
-                <ArrowLeft size={13} />
-                <span>Back to edit text</span>
-              </button>
-
-              <button
-                onClick={handlePublishPrototype}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-xs font-medium shadow-sm"
-              >
-                <Feather size={14} />
-                <span>Publish to Session Feed</span>
-              </button>
-            </div>
+              <p className="text-[10px] opacity-80 leading-relaxed">
+                Kept strictly for your eyes in My Space. Never discovered.
+              </p>
+            </button>
           </div>
-        )}
+        </div>
 
-        {/* Publish / Action Feedback Message */}
-        {publishFeedback && (
-          <div className="p-4 rounded-xl bg-ankahe-secondary border border-ankahe-gold/40 text-xs text-ankahe-text space-y-2 animate-in fade-in">
-            <p className="font-medium text-ankahe-gold">Feed Update Notice:</p>
-            <p className="leading-relaxed text-ankahe-muted">{publishFeedback}</p>
-            <div className="pt-2 flex items-center gap-3">
-              <button
-                onClick={() => navigate('/home')}
-                className="px-4 py-1.5 rounded-lg bg-ankahe-elevated hover:bg-ankahe-secondary text-xs text-ankahe-gold border border-ankahe-gold/30"
-              >
-                View on Community Home
-              </button>
-              <button
-                onClick={() => setPublishFeedback(null)}
-                className="text-xs text-ankahe-muted hover:text-ankahe-text"
-              >
-                Dismiss
-              </button>
-            </div>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="text-xs text-ankahe-muted hover:text-ankahe-text inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft size={13} />
+            <span>Cancel and return</span>
+          </button>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isSavingDraft || isPublishing}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-ankahe-secondary hover:bg-ankahe-elevated text-xs font-medium border border-ankahe-border text-ankahe-muted hover:text-ankahe-text transition-colors disabled:opacity-50"
+            >
+              <Save size={13} />
+              <span>{isSavingDraft ? 'Saving Draft...' : 'Save as Draft'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={isPublishing || isSavingDraft}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-xs sm:text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+            >
+              <span>
+                {isPublishing
+                  ? 'Publishing...'
+                  : visibility === 'private'
+                  ? 'Save Private Draft'
+                  : 'Publish to ANKAHE'}
+              </span>
+              <Check size={14} />
+            </button>
           </div>
-        )}
-
+        </div>
       </div>
     </CommunityLayout>
   );

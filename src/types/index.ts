@@ -41,24 +41,31 @@ export type UnsentLetterCategory =
 
 export interface WritingItem {
   id: string;
+  userId?: string;
   title?: string;
   content: string;
   author: string;
+  authorUsername?: string;
+  authorAvatar?: string;
   isAnonymous?: boolean;
   type: WritingType;
   language: Language;
-  category: EmotionCategory;
+  category: EmotionCategory | string;
   visibility?: VisibilityPreference;
+  status?: 'draft' | 'published' | 'archived';
+  createdAt?: string;
+  updatedAt?: string;
   dateApprox?: string;
-  isPaperStyle?: boolean; // Renders on warm ivory surface
+  isPaperStyle?: boolean;
   scriptStyle?: 'devanagari' | 'nastaliq' | 'serif' | 'sans';
-  // Quiet resonance signals (not public competitions)
+  // Quiet resonance signals (user's personal connection)
   feltCount?: number;
   userFelt?: boolean;
   stayedCount?: number;
   userStayed?: boolean;
   warmthCount?: number;
   userWarmth?: boolean;
+  isSaved?: boolean;
 }
 
 export interface UnsentLetterItem {
@@ -71,6 +78,20 @@ export interface UnsentLetterItem {
   dateText: string;
   postscript?: string;
   language?: Language;
+  isAnonymous?: boolean;
+  userId?: string;
+  createdAt?: string;
+}
+
+export interface CommentItem {
+  id: string;
+  writingId: string;
+  userId: string;
+  authorName: string;
+  authorUsername?: string;
+  content: string;
+  createdAt: string;
+  isOwn?: boolean;
 }
 
 export interface DraftItem {
@@ -79,17 +100,23 @@ export interface DraftItem {
   content: string;
   type: WritingType;
   language: Language;
-  category: EmotionCategory;
+  category: EmotionCategory | string;
   visibility: VisibilityPreference;
+  status: 'draft';
   savedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserProfile {
-  penName: string;
+  id: string;
+  username: string;
+  displayName: string;
   bio: string;
-  preferredLanguages: Language[];
-  isAnonymousDefault: boolean;
-  joinedDate: string;
+  avatarUrl?: string;
+  preferredLanguage: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface TeaserFragment {

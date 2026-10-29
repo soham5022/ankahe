@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Home as HomeIcon, 
   Compass, 
@@ -8,12 +8,16 @@ import {
   Moon, 
   BookMarked, 
   User, 
+  Settings as SettingsIcon,
   Info, 
   ShieldCheck, 
   ArrowLeft,
   Menu,
-  X
+  X,
+  LogIn,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useCommunity } from '../../context/CommunityContext';
 import { Toast } from '../Toast';
 
@@ -26,9 +30,17 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
   children, 
   rightContextPanel 
 }) => {
-  const { toastMessage } = useCommunity();
+  const { user, profile, signOut } = useAuth();
+  const { toastMessage, showToast } = useCommunity();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    showToast("Signed out. Your words remain safe.");
+    navigate('/');
+  };
 
   const navLinks = [
     { to: '/home', label: 'Home', icon: HomeIcon },
@@ -41,21 +53,22 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
 
   const secondaryLinks = [
     { to: '/profile', label: 'Profile', icon: User },
+    { to: '/settings', label: 'Settings', icon: SettingsIcon },
     { to: '/about', label: 'About', icon: Info },
     { to: '/principles', label: 'Principles', icon: ShieldCheck },
   ];
 
+  const userInitial = (profile?.displayName || user?.email || 'A').charAt(0).toUpperCase();
+
   return (
     <div className="min-h-screen bg-ankahe-bg text-ankahe-text flex flex-col md:flex-row selection:bg-ankahe-gold/25 selection:text-ankahe-text">
-      
       {/* ========================================================
           DESKTOP LEFT SIDEBAR (Width: 260px)
           ======================================================== */}
       <aside className="hidden md:flex flex-col w-64 lg:w-72 bg-ankahe-secondary/70 border-r border-ankahe-border shrink-0 sticky top-0 h-screen p-6 justify-between z-30">
-        <div className="space-y-8">
-          
-          {/* Brand Wordmark & Prototype Badge */}
-          <div className="space-y-1.5">
+        <div className="space-y-6">
+          {/* Brand Wordmark */}
+          <div className="space-y-1">
             <Link 
               to="/home" 
               className="group flex items-baseline gap-2 focus:outline-none"
@@ -68,13 +81,40 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
                 अनकहे
               </span>
             </Link>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-ankahe-gold/70 bg-ankahe-elevated px-2 py-0.5 rounded border border-ankahe-border">
-                Community • Phase 2
-              </span>
-            </div>
           </div>
+
+          {/* User Monogram Card if Authenticated */}
+          {user ? (
+            <Link
+              to="/profile"
+              className="p-3 rounded-2xl bg-ankahe-elevated/70 border border-ankahe-border hover:border-ankahe-gold/40 flex items-center gap-3 transition-colors group"
+            >
+              <div className="w-9 h-9 rounded-full bg-ankahe-secondary border border-ankahe-gold/40 flex items-center justify-center font-serif text-sm text-ankahe-gold shrink-0">
+                {userInitial}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="block font-medium text-xs text-ankahe-text group-hover:text-ankahe-gold truncate">
+                  {profile?.displayName || 'A Quiet Soul'}
+                </span>
+                <span className="block font-mono text-[10px] text-ankahe-muted/70 truncate">
+                  @{profile?.username || 'writer'}
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="p-3 rounded-2xl bg-ankahe-elevated/50 border border-ankahe-border space-y-2 text-xs">
+              <span className="text-[11px] text-ankahe-muted block">
+                Reading as guest visitor
+              </span>
+              <Link
+                to="/login"
+                className="w-full py-1.5 px-3 rounded-xl bg-ankahe-paper text-ankahe-ink hover:bg-ankahe-cream text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+              >
+                <LogIn size={12} />
+                <span>Sign In</span>
+              </Link>
+            </div>
+          )}
 
           {/* Primary Navigation Links */}
           <nav className="space-y-1" aria-label="Community primary navigation">
@@ -104,8 +144,8 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
           </nav>
         </div>
 
-        {/* Footer Area: Secondary links & Return to Teaser */}
-        <div className="space-y-4 pt-6 border-t border-ankahe-border/60">
+        {/* Footer Area: Secondary links, Sign out & Return to Teaser */}
+        <div className="space-y-4 pt-4 border-t border-ankahe-border/60">
           <div className="space-y-1">
             {secondaryLinks.map((item) => {
               const Icon = item.icon;
@@ -126,6 +166,16 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
                 </NavLink>
               );
             })}
+
+            {user && (
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs text-ankahe-muted/80 hover:text-red-400 hover:bg-ankahe-elevated/30 transition-colors"
+              >
+                <LogOut size={14} className="text-ankahe-muted/60" />
+                <span>Sign Out</span>
+              </button>
+            )}
           </div>
 
           {/* Return to Public Teaser */}
@@ -177,7 +227,40 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
       {/* Mobile Drawer (Expandable Menu) */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-x-0 top-[57px] bottom-0 bg-ankahe-bg/95 backdrop-blur-lg z-30 p-6 space-y-6 overflow-y-auto animate-in fade-in duration-200">
-          <div className="space-y-2">
+          {user ? (
+            <div className="p-3 rounded-xl bg-ankahe-secondary border border-ankahe-border flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-ankahe-elevated border border-ankahe-gold/40 flex items-center justify-center font-serif text-sm text-ankahe-gold">
+                {userInitial}
+              </div>
+              <div>
+                <span className="block font-medium text-xs text-ankahe-text">
+                  {profile?.displayName || 'A Quiet Soul'}
+                </span>
+                <span className="block font-mono text-[10px] text-ankahe-muted">
+                  @{profile?.username || 'writer'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Link
+                to="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex-1 py-2 text-center rounded-xl bg-ankahe-paper text-ankahe-ink text-xs font-medium"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/signup"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex-1 py-2 text-center rounded-xl bg-ankahe-secondary text-ankahe-text border border-ankahe-border text-xs"
+              >
+                Sign Up
+              </Link>
+            </div>
+          )}
+
+          <div className="space-y-1">
             <span className="text-[11px] font-mono uppercase tracking-widest text-ankahe-gold/80 block pb-1">
               Main Menu
             </span>
@@ -201,9 +284,9 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
             })}
           </div>
 
-          <div className="pt-4 border-t border-ankahe-border space-y-2">
+          <div className="pt-4 border-t border-ankahe-border space-y-1">
             <span className="text-[11px] font-mono uppercase tracking-widest text-ankahe-muted/60 block pb-1">
-              Identity & Principles
+              Identity & Care
             </span>
             {secondaryLinks.map((item) => {
               const Icon = item.icon;
@@ -219,6 +302,20 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
                 </Link>
               );
             })}
+
+            {user && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="w-full flex items-center gap-3 p-2.5 rounded-lg text-sm text-red-400 hover:bg-red-950/20"
+              >
+                <LogOut size={16} />
+                <span>Sign Out</span>
+              </button>
+            )}
+
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
@@ -249,74 +346,7 @@ export const CommunityLayout: React.FC<CommunityLayoutProps> = ({
         </aside>
       )}
 
-      {/* ========================================================
-          MOBILE BOTTOM NAVIGATION (Touch-Friendly bar)
-          ======================================================== */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-ankahe-secondary/95 backdrop-blur-md border-t border-ankahe-border z-40 flex items-center justify-around py-2 px-1 safe-area-inset-bottom">
-        <NavLink
-          to="/home"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 p-2 text-[10px] min-w-[54px] min-h-[44px] justify-center ${
-              isActive ? 'text-ankahe-gold font-medium' : 'text-ankahe-muted hover:text-ankahe-text'
-            }`
-          }
-        >
-          <HomeIcon size={18} />
-          <span>Home</span>
-        </NavLink>
-
-        <NavLink
-          to="/discover"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 p-2 text-[10px] min-w-[54px] min-h-[44px] justify-center ${
-              isActive ? 'text-ankahe-gold font-medium' : 'text-ankahe-muted hover:text-ankahe-text'
-            }`
-          }
-        >
-          <Compass size={18} />
-          <span>Discover</span>
-        </NavLink>
-
-        <NavLink
-          to="/write"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 p-2 text-[10px] min-w-[54px] min-h-[44px] justify-center ${
-              isActive ? 'text-ankahe-gold font-medium' : 'text-ankahe-muted hover:text-ankahe-text'
-            }`
-          }
-        >
-          <div className="w-7 h-7 rounded-full bg-ankahe-paper text-ankahe-ink flex items-center justify-center -mt-2 shadow-sm">
-            <Feather size={14} />
-          </div>
-          <span className="font-medium text-ankahe-gold">Write</span>
-        </NavLink>
-
-        <NavLink
-          to="/unsent-letters"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 p-2 text-[10px] min-w-[54px] min-h-[44px] justify-center ${
-              isActive ? 'text-ankahe-gold font-medium' : 'text-ankahe-muted hover:text-ankahe-text'
-            }`
-          }
-        >
-          <Mail size={18} />
-          <span>Letters</span>
-        </NavLink>
-
-        <NavLink
-          to="/my-space"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 p-2 text-[10px] min-w-[54px] min-h-[44px] justify-center ${
-              isActive ? 'text-ankahe-gold font-medium' : 'text-ankahe-muted hover:text-ankahe-text'
-            }`
-          }
-        >
-          <BookMarked size={18} />
-          <span>My Space</span>
-        </NavLink>
-      </nav>
-
-      {/* Global Toast for resonance / saving feedback */}
+      {/* Global Quiet Toast Notifications */}
       <Toast message={toastMessage} />
     </div>
   );
