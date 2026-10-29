@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 import { Navbar } from '../components/Navbar';
-import { TeaserOpening } from '../components/TeaserOpening';
-import { TeaserStorySequence } from '../components/TeaserStorySequence';
-import { TeaserPersonalMoment } from '../components/TeaserPersonalMoment';
-import { TeaserFinalReveal } from '../components/TeaserFinalReveal';
+import { TeaserAtmosphere } from '../components/teaser/TeaserAtmosphere';
+import { TeaserHeroOpening } from '../components/teaser/TeaserHeroOpening';
+import { TeaserTheThingsWeKeep } from '../components/teaser/TeaserTheThingsWeKeep';
+import { TeaserMultilingualSpectrum } from '../components/teaser/TeaserMultilingualSpectrum';
+import { TeaserSanctuaryDual } from '../components/teaser/TeaserSanctuaryDual';
+import { TeaserThresholdInvitation } from '../components/teaser/TeaserThresholdInvitation';
 import { Footer } from '../components/Footer';
 
 // Interactive Modals
@@ -18,6 +22,10 @@ import { Toast } from '../components/Toast';
 import type { UnsentLetterItem } from '../types';
 
 export const Home: React.FC = () => {
+  const { user } = useAuth();
+  const isAuthenticated = Boolean(user);
+  const navigate = useNavigate();
+
   // Modal states
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [selectedLetter, setSelectedLetter] = useState<UnsentLetterItem | null>(null);
@@ -35,7 +43,7 @@ export const Home: React.FC = () => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2800);
+    }, 3000);
   };
 
   const toggleWarmTheme = () => {
@@ -52,8 +60,16 @@ export const Home: React.FC = () => {
     });
   };
 
+  const handleEnterAnkahe = () => {
+    if (isAuthenticated) {
+      navigate('/home');
+    } else {
+      setIsEntryModalOpen(true);
+    }
+  };
+
   const scrollToStory = () => {
-    const el = document.getElementById('story-moments');
+    const el = document.getElementById('scene-things-we-keep');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
     }
@@ -65,37 +81,44 @@ export const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-ankahe-bg text-ankahe-text relative selection:bg-ankahe-gold/25 selection:text-ankahe-text">
-      {/* 
-        Minimal Navigation:
-        Extremely restrained wordmark, About, Principles, Theme Toggle, and skip-to-Enter option.
-        Rain sound toggle intentionally removed so words and curiosity lead the experience.
-      */}
+      {/* Cinematic Ambient Atmosphere (Film grain, pointer lighting, subtle light fields) */}
+      <TeaserAtmosphere />
+
+      {/* Editorial Navigation with Procedural Audio Toggle */}
       <Navbar
-        onEnterAnkahe={() => setIsEntryModalOpen(true)}
+        onEnterAnkahe={handleEnterAnkahe}
         onOpenAboutModal={() => setIsAboutModalOpen(true)}
         onOpenPrinciplesModal={() => setIsPrinciplesModalOpen(true)}
         isWarmTheme={isWarmTheme}
         onToggleWarmTheme={toggleWarmTheme}
       />
 
-      {/* The Teaser Experience: Curiosity -> Recognition -> Connection -> Personal Pause -> Full Reveal */}
-      <main className="flex-1">
-        {/* Phase 1: Opening — Curiosity */}
-        <TeaserOpening onScrollToStory={scrollToStory} />
+      {/* The 5-Scene Cinematic Teaser Journey */}
+      <main className="flex-1 relative z-10">
+        {/* Scene 1: Prologue & Hero Composition */}
+        <TeaserHeroOpening
+          onEnterAnkahe={handleEnterAnkahe}
+          onScrollToStory={scrollToStory}
+          isAuthenticated={isAuthenticated}
+        />
 
-        {/* Phase 2: Visual Story Sequence — Recognition & Connection (Four Moments) */}
-        <TeaserStorySequence
+        {/* Scene 2: The Things We Keep (Intimate Notebook & Unsent Letter) */}
+        <TeaserTheThingsWeKeep
           onOpenLetter={(letter) => setSelectedLetter(letter)}
           onShowToast={showToast}
         />
 
-        {/* Phase 3: The Personal Moment — Intimate Reflection with Generous Whitespace */}
-        <TeaserPersonalMoment />
+        {/* Scene 3: Different Kinds of Words (Multilingual & Multi-Emotional Spectrum) */}
+        <TeaserMultilingualSpectrum />
 
-        {/* Phase 4: The Final Reveal — Revelation & Invitation */}
-        <TeaserFinalReveal
-          onEnterAnkahe={() => setIsEntryModalOpen(true)}
+        {/* Scene 4: A Place to Keep Them (Sanctuary Desk & Quiet Community) */}
+        <TeaserSanctuaryDual />
+
+        {/* Scene 5: The Threshold & Final Invitation */}
+        <TeaserThresholdInvitation
+          onEnterAnkahe={handleEnterAnkahe}
           onReadAgain={scrollToTop}
+          isAuthenticated={isAuthenticated}
         />
       </main>
 
@@ -108,7 +131,7 @@ export const Home: React.FC = () => {
         onOpenContactModal={() => setSafetyModalType('contact')}
       />
 
-      {/* Phase 1 Prototype Authentication Entry Modal */}
+      {/* Entry Modal for Unauthenticated Users */}
       <EntryModal
         isOpen={isEntryModalOpen}
         onClose={() => setIsEntryModalOpen(false)}
