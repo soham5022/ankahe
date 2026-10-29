@@ -28,7 +28,7 @@ describe('ANKAHE 2.0 — Cinematic Teaser Experience Suite', () => {
     expect(screen.getAllByText(/ANKAHE/i).length).toBeGreaterThan(0);
 
     // Scene 2: The Things We Keep
-    expect(screen.getByText(/The Things We Keep/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/The Things We Keep/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Khata • Unsent Letter/i)).toBeInTheDocument();
 
     // Scene 3: Different Kinds of Words

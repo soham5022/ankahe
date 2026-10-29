@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           : 'bg-transparent py-5'
       }`}
     >
-      <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 flex items-center justify-between">
+      <div className="w-full px-4 sm:px-8 lg:px-16 xl:px-24 2xl:px-32 flex items-center justify-between">
         {/* Minimal Wordmark: subtle and editorial */}
         <a
           href="#"

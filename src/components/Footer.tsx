@@ -17,8 +17,8 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenContactModal,
 }) => {
   return (
-    <footer className="border-t border-ankahe-border bg-ankahe-secondary/60 text-ankahe-muted py-14 sm:py-20 px-4 sm:px-6 lg:px-8 mt-auto">
-      <div className="max-w-6xl mx-auto space-y-12">
+    <footer className="border-t border-white/[0.08] bg-ankahe-secondary/70 backdrop-blur-md text-ankahe-muted py-14 sm:py-20 px-4 sm:px-8 lg:px-16 xl:px-24 2xl:px-32 mt-auto">
+      <div className="max-w-[1700px] mx-auto space-y-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand & Purpose */}
           <div className="md:col-span-2 space-y-4">
@@ -47,28 +47,23 @@ export const Footer: React.FC<FooterProps> = ({
             </h4>
             <ul className="space-y-2 text-xs sm:text-sm">
               <li>
-                <a href="#story-moments" className="hover:text-ankahe-gold transition-colors">
-                  01 • Something Unsaid
+                <a href="#scene-things-we-keep" className="hover:text-ankahe-gold transition-colors">
+                  01 • The Things We Keep
                 </a>
               </li>
               <li>
-                <a href="#story-moments" className="hover:text-ankahe-gold transition-colors">
-                  02 • An Unsent Letter
+                <a href="#scene-multilingual-spectrum" className="hover:text-ankahe-gold transition-colors">
+                  02 • Different Kinds of Words
                 </a>
               </li>
               <li>
-                <a href="#story-moments" className="hover:text-ankahe-gold transition-colors">
-                  03 • A Memory
-                </a>
-              </li>
-              <li>
-                <a href="#story-moments" className="hover:text-ankahe-gold transition-colors">
-                  04 • A Little Hope
+                <a href="#scene-sanctuary-dual" className="hover:text-ankahe-gold transition-colors">
+                  03 • Sanctuary & Discovery
                 </a>
               </li>
               <li>
                 <a href="#reveal" className="hover:text-ankahe-gold transition-colors">
-                  The Reveal • ANKAHE
+                  The Threshold • ANKAHE
                 </a>
               </li>
             </ul>
